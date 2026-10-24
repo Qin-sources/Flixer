@@ -2965,56 +2965,44 @@ async function mpvCmd(name, value){
 }
 
 function _mpvRect(v){
-  // 依次尝试：画面容器 → 视频元素 → 舞台
-  // （起播瞬间 video 还没有内在尺寸，高度可能是 0）
+  // 目标：播放区里居中、约 72% 大小，且完全落在可用桌面区域内（不压任务栏）
   const stage = document.querySelector('.pl-stage') || document.querySelector('.pl-body') || v;
   if (!stage) return null;
   let r;
   try { r = stage.getBoundingClientRect(); } catch(e){ return null; }
   if (r.width < 240 || r.height < 140) return null;
 
-  // 让出底部控制条（约 96px）和右侧侧栏（打开时 304px）
-  // 用「控制条顶边」来算高度，保证控制条完整露在 mpv 窗口下面
-  let ctrlTop = 0, ctrlH = 0;
-  try {
-    const c = document.getElementById('plCtrl');
-    if (c){
-      const cr = c.getBoundingClientRect();
-      ctrlTop = cr.top;
-      ctrlH = cr.height || 0;
-    }
-  } catch(e){}
-  if (!ctrlH) ctrlH = 96;
-
-  let sideW = 0;
-  try {
-    const side = document.getElementById('plSide');
-    if (side && side.classList.contains('on')){
-      sideW = side.getBoundingClientRect().width || 0;
-    }
-  } catch(e){}
-
   const dpr = window.devicePixelRatio || 1;
   const chromeH = (window.outerHeight - window.innerHeight) || 0;
-  const gap = 16;   // 控制条上方留一点空隙
 
-  // 可用高度 = 控制条顶边 - 舞台上边 - 间隙
-  let usableH = r.height;
-  if (ctrlTop > r.top){
-    usableH = ctrlTop - r.top - gap;
-  } else {
-    usableH = r.height - ctrlH - gap;
-  }
-  if (usableH < 140) usableH = Math.max(140, r.height - ctrlH - gap);
+  // 可用桌面（浏览器拿到的 avail*）→ 物理像素
+  const availW = Math.round((window.screen.availWidth  || window.screen.width)  * dpr);
+  const availH = Math.round((window.screen.availHeight || window.screen.height) * dpr);
+  const originX = Math.round((window.screen.availLeft || 0) * dpr);
+  const originY = Math.round((window.screen.availTop  || 0) * dpr);
 
-  const w = Math.max(240, Math.round((r.width - sideW) * dpr));
-  const h = Math.max(140, Math.round(usableH * dpr));
-  return {
-    x: Math.round((window.screenX + r.left) * dpr),
-    y: Math.round((window.screenY + chromeH + r.top) * dpr),
-    w: w,
-    h: h
-  };
+  // 播放区中心的屏幕坐标（物理像素）
+  const cx = (window.screenX + r.left + r.width / 2) * dpr;
+  const cy = (window.screenY + chromeH + r.top + r.height / 2) * dpr;
+
+  // 尺寸：播放区的 72%，同时不超过可用桌面的 78%
+  let w = Math.round(r.width * dpr * 0.72);
+  let h = Math.round(r.height * dpr * 0.72);
+  const maxW = Math.round(availW * 0.78);
+  const maxH = Math.round(availH * 0.78);
+  if (w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+  if (h > maxH){ w = Math.round(w * maxH / h); h = maxH; }
+  if (w < 320) w = 320;
+  if (h < 180) h = 180;
+
+  // 居中，然后夹紧到可用区域内（底部至少留 12px 给任务栏）
+  let x = Math.round(cx - w / 2);
+  let y = Math.round(cy - h / 2);
+  const pad = 12;
+  x = Math.max(originX + pad, Math.min(x, originX + availW - w - pad));
+  y = Math.max(originY + pad, Math.min(y, originY + availH - h - pad));
+
+  return { x: x, y: y, w: w, h: h };
 }
 
 function mpvInstallProxy(v){
@@ -3108,6 +3096,18 @@ async function mpvStart(v, d, title){
 
   try { v.removeAttribute('src'); v.load(); } catch(e){}
   mpvInstallProxy(v);
+
+  // mpv 可能在新文件加载后自己改小窗口 → 起播后再校正两次
+  try {
+    const _refit = () => {
+      const rr = _mpvRect(v);
+      if (!rr) return;
+      const q2 = new URLSearchParams({ x: rr.x, y: rr.y, w: rr.w, h: rr.h });
+      fetch('/api/mpv/fit?' + q2.toString(), { method: 'POST' }).catch(() => {});
+    };
+    setTimeout(_refit, 1500);
+    setTimeout(_refit, 4000);
+  } catch(e){}
 
   clearInterval(MPV.timer);
   MPV.timer = setInterval(mpvPoll, 1000);
@@ -4145,9 +4145,14 @@ function goHomeView(){
   setTab('home');
   $('#searchbox').classList.remove('open');
   $('#hero').classList.remove('hidden');
-  if (state.home){
+  // 从详情返回：首页内容还在，就别重渲染（否则会闪一下）
+  const _returning = !!window.__restoreDetailScroll;
+  if (state.home && !_returning){
     renderRows(state.home.rows);
     buildHero(state.hero);
+  } else if (state.home && _returning){
+    // 只恢复布局，不重建 DOM
+    try { $('#hero').classList.remove('hidden'); } catch(e){}
   }
   // 从详情页返回时回到原位置，不要跳回顶部
   if (window.__restoreDetailScroll && typeof window.__detailScroll === 'number'){

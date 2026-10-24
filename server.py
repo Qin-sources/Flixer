@@ -202,6 +202,21 @@ def _find_mpv():
     return None
 
 
+@app.route("/api/mpv/fit", methods=["POST", "GET"])
+def api_mpv_fit():
+    """把 mpv 窗口摆到指定矩形（起播后再校正一次，防 mpv 自己改小）"""
+    from services import mpvctl as MPV
+    def _n(k, d=0):
+        try:
+            return int(float(request.args.get(k) or d))
+        except Exception:
+            return d
+    x, y = _n("x"), _n("y")
+    w, h = _n("w", 900), _n("h", 500)
+    ok = MPV.fit(x, y, w, h)
+    return ok({"fitted": bool(ok), "rect": [x, y, w, h]})
+
+
 @app.route("/api/mpv/play", methods=["POST", "GET"])
 def api_mpv_play():
     """用 mpv 播放（网页当遥控器）"""
@@ -1487,6 +1502,25 @@ def api_cache_clear():
     except Exception as e:
         return err(str(e), 500)
 
+
+
+def _prewarm_mpv():
+    """后台预热 mpv，让第一次点播放也接近秒开"""
+    try:
+        import time as _t
+        _t.sleep(3)
+        from services import mpvctl as _MPV
+        if _MPV.available():
+            _MPV.warm()
+    except Exception:
+        pass
+
+
+try:
+    import threading as _th
+    _th.Thread(target=_prewarm_mpv, daemon=True).start()
+except Exception:
+    pass
 
 if __name__ == "__main__":
     port = int(os.environ.get("FLIXER_PORT", "7100"))

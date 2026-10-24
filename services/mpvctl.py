@@ -164,7 +164,7 @@ def _find_hwnd(pid):
         return None
 
 
-def _fit_window(x, y, w, h, tries=12):
+def _fit_window(x, y, w, h, tries=45):
     """
     把 mpv 窗口精确移到 (x, y) 尺寸 (w, h)。
     mpv 启动后窗口会变几次，所以重试若干次直到稳定。
@@ -242,6 +242,20 @@ def _apply_video_track(tries=12):
             pass
         time.sleep(0.25)
     return False
+
+
+def warm():
+    """预热：提前把 mpv 进程和 IPC 通道建好，点播放时只 loadfile"""
+    try:
+        _ensure()
+        return True
+    except Exception:
+        return False
+
+
+def fit(x, y, w, h):
+    """外部调用：立即把窗口摆到指定矩形（返回是否成功）"""
+    return _fit_window(int(x), int(y), int(w), int(h))
 
 
 def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
