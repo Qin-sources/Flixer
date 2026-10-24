@@ -800,6 +800,9 @@ html.fs-on .pl-ctrl{
   width:auto !important;margin:0 !important;height:84px !important;
   padding:0 28px !important;z-index:9 !important;
   background:linear-gradient(transparent,rgba(0,0,0,.9)) !important}
+/* 原生（铺满）模式：不留 Dock，整屏使用 */
+.pl-wrap:not(.mpv-mode) .pl-stage{padding-bottom:18px !important}
+.pl-wrap:not(.mpv-mode) .pl-body{height:calc(100vh - 200px) !important}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -3369,7 +3372,6 @@ async function mpvStart(v, d, title){
   } catch(e){ window._mpvBusy = false; return false; }
 
   MPV.active = true;
-  try { document.getElementById('plWrap').classList.add('mpv-mode'); } catch(e){}
   MPV.v = v;
   MPV.fid = d.fid;
   MPV.title = title || '';
@@ -3477,6 +3479,12 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
       {spinner:false});
     return;
   }
+
+  // 起播先重置遮罩，避免上一次的提示残留
+  try {
+    const _v = document.getElementById('plVeilMsg');
+    if (_v) _v.innerHTML = '<div class="big">正在解析片源…</div>';
+  } catch(e){}
 
   // ── 阶段 1：解析（这一步会告诉我们失效原因）
   let d;
