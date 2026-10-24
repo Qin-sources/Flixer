@@ -77,7 +77,12 @@ def err(msg, code=400, **extra):
 def index():
     idx = os.path.join(ROOT, "static", "index.html")
     if os.path.exists(idx):
-        return send_from_directory(os.path.join(ROOT, "static"), "index.html")
+        resp = send_from_directory(os.path.join(ROOT, "static"), "index.html")
+    # 首页永不缓存：否则改了代码看到的还是旧页面（今天踩过好几次）
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
     return "<h1>Flixer</h1><p>UI 还没建。试试 <a href='/api/search?q=奥本海默'>/api/search?q=奥本海默</a>"
 
 
@@ -553,8 +558,9 @@ def api_audio():
 
     # ② 其它容器（mp4 等）：ffmpeg 读文件头
     if not info:
+        # ffmpeg 带不上夸克需要的 Cookie，改让它读本地代理
         try:
-            info = AU.probe_ffmpeg(url, hdrs)
+            info = AU.probe_ffmpeg("http://127.0.0.1:7100/api/stream?fid=" + fid)
         except Exception:
             info = None
 
