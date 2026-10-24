@@ -122,7 +122,7 @@ def _ensure_locked():
         raise IOError("未找到 mpv")
     if _proc is None or _proc.poll() is not None:
         args = [_MPV, "--no-config", "--idle=yes", "--force-window=yes",
-                "--no-border", "--ontop", 
+                "--no-border", "--ontop", "--focus-on=never", "--keepaspect-window=no", "--hidpi-window-scale=no", 
                 "--keep-open=no", "--hwdec=auto-safe", "--osc=no",
                 "--input-ipc-server=" + PIPE_NAME]
         _proc = subprocess.Popen(args, stdout=subprocess.DEVNULL,
@@ -136,6 +136,57 @@ def _ensure_locked():
 
 def is_running():
     return bool(_proc and _proc.poll() is None)
+
+
+
+def _find_hwnd(pid):
+    """按进程 ID 找可见主窗口句柄"""
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+        user32 = ctypes.windll.user32
+        found = []
+
+        @ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
+        def _cb(hwnd, lparam):
+            p = wt.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(p))
+            if p.value == pid and user32.IsWindowVisible(hwnd):
+                r = wt.RECT()
+                user32.GetWindowRect(hwnd, ctypes.byref(r))
+                if (r.right - r.left) > 200 and (r.bottom - r.top) > 100:
+                    found.append(hwnd)
+            return True
+
+        user32.EnumWindows(_cb, 0)
+        return found[0] if found else None
+    except Exception:
+        return None
+
+
+def _fit_window(x, y, w, h, tries=12):
+    """
+    把 mpv 窗口精确移到 (x, y) 尺寸 (w, h)。
+    mpv 启动后窗口会变几次，所以重试若干次直到稳定。
+    """
+    if not is_running() or not _proc:
+        return False
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        SWP_NOZORDER = 0x0004
+        SWP_NOACTIVATE = 0x0010
+        ok = False
+        for _ in range(tries):
+            hwnd = _find_hwnd(_proc.pid)
+            if hwnd:
+                user32.SetWindowPos(hwnd, 0, int(x), int(y), int(w), int(h),
+                                    SWP_NOZORDER | SWP_NOACTIVATE)
+                ok = True
+            time.sleep(0.15)
+        return ok
+    except Exception:
+        return False
 
 
 def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
@@ -156,20 +207,15 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     _cache["duration"] = 0.0
     _cache["pause"] = False
 
-    # 等时长出现（最多 ~6 秒）；失败就重下一次
-    for attempt in range(2):
-        for _ in range(7):
-            time.sleep(0.4)
-            d = _get("duration", 0.6)
-            if d and float(d) > 1:
-                _cache["duration"] = float(d)
-                break
-        if _cache["duration"] > 1:
-            break
-        _send({"command": ["set_property", "pause", False]}, 0.8)
-        r = _send({"command": ["loadfile", url]}, 3.0)
+    _send({"command": ["set_property", "pause", False]}, 0.6)
+    # 换片后 mpv 会重置窗口 → 用 Win32 精确摆位（geometry 会被 mpv 缩放，不可靠）
+    try:
+        import threading as _th
+        _th.Thread(target=_fit_window, args=(x, y, w, h), daemon=True).start()
+    except Exception:
+        pass
 
-    _send({"command": ["set_property", "pause", False]}, 0.8)
+    # 不再等待时长（那会让网页干等 3-6 秒）；交给 status 轮询补齐
     return r
 
 
@@ -213,6 +259,10 @@ def status():
     if not is_running():
         return {"running": False}
     _poll_n["n"] += 1
+    if not _cache.get("duration"):
+        dv = _get("duration", 0.5)
+        if dv and float(dv) > 1:
+            _cache["duration"] = float(dv)
     t = _get("time-pos", 0.6)
     if _poll_n["n"] % 3 == 0:
         pv = _get("pause", 0.5)

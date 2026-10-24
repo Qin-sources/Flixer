@@ -2924,6 +2924,7 @@ function _mpvRect(v){
     let r;
     try { r = el.getBoundingClientRect(); } catch(e){ continue; }
     if (r.width < 320 || r.height < 200) continue;
+    // mpv 已关闭 hidpi 缩放（--hidpi-window-scale=no），直接给 CSS 像素即可
     return {
       x: Math.round(window.screenX + r.left),
       y: Math.round(window.screenY + chromeH + r.top),
