@@ -3314,7 +3314,16 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
     const _ai = d.audio_info || {};
     const _vi = d.video_info || null;
     const _tracks = _vi ? (_vi.tracks || 0) : 0;
-    var _needMpv = (_ai.browser_ok === false) || (_tracks > 1);
+    var _codecs = (_vi && _vi.codecs) ? _vi.codecs : [];
+    var _isHevc = _codecs.some(function(c){ return /^(hevc|h265|hev1|hvc1)$/i.test(String(c || '')); });
+    var _canHevc = false;
+    try {
+      var _probeV = document.createElement('video');
+      _canHevc = (_probeV.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"') !== '')
+              || (_probeV.canPlayType('video/mp4; codecs="hev1.1.6.L120.90"') !== '');
+    } catch(e){}
+    // 音轨放不了 / 多视频轨（假轨）/ HEVC 且浏览器不支持 → 交给 mpv
+    var _needMpv = (_ai.browser_ok === false) || (_tracks > 1) || (_isHevc && !_canHevc);
   }
   if (typeof _needMpv === 'undefined') var _needMpv = true;
 if (window._preferWebPlayer !== true){
@@ -3334,6 +3343,30 @@ if (window._preferWebPlayer !== true){
 
   plVeil('正在缓冲…');
   if (!_mpvOn) v.src = d.stream;
+
+  // 原生播放兜底：报错或 6 秒没画面 → 自动改走 mpv
+  if (!_mpvOn){
+    let _fellBack = false;
+    const _fallback = (why) => {
+      if (_fellBack || !alive() || MPV.active) return;
+      _fellBack = true;
+      window._mpvBusy = true;
+      mpvStart(v, d, title || d.name).then(ok => {
+        if (ok){
+          try { v.removeAttribute('src'); v.load(); } catch(e){}
+          try { plVeilHide(); bindPlayerUI(); } catch(e){}
+        } else {
+          window._mpvBusy = false;
+          plVeil('<div class="big">这个片源播不了</div><div class="msg">' + esc(why || '浏览器不支持该编码') + '</div><div class="acts"><button class="pl-warn-btn" onclick="closePlayer()">换一个片源</button></div>', {spinner:false});
+        }
+      }).catch(() => { window._mpvBusy = false; });
+    };
+    v.addEventListener('error', () => _fallback('浏览器解码失败'), { once: true });
+    setTimeout(() => {
+      if (!alive() || MPV.active || _fellBack) return;
+      if (v.readyState < 2 || !v.videoWidth) _fallback('画面一直没有出来');
+    }, 6000);
+  }
 
   /* 静音状态同步（带图标反馈） */
   const setMuted = (on) => {
