@@ -289,7 +289,9 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     _send({"command": ["set_property", "geometry", geo]}, 1.0)
     if title:
         _send({"command": ["set_property", "title", title[:60]]}, 1.0)
+    # 先用隐藏窗口加载，摆好位再显示，避免看到那一下跳动
     _send({"command": ["set_property", "force-window", True]}, 1.0)
+    _send({"command": ["set_property", "window-minimized", True]}, 0.8)
     _send({"command": ["set_property", "pause", False]}, 1.0)
     r = _send({"command": ["loadfile", url]}, 3.0)
     _fid = fid
@@ -300,7 +302,12 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     # 换片后 mpv 会重置窗口 → 用 Win32 精确摆位（geometry 会被 mpv 缩放，不可靠）
     try:
         import threading as _th
-        _th.Thread(target=_fit_window, args=(x, y, w, h), daemon=True).start()
+
+        def _place():
+            _fit_window(x, y, w, h)
+            _send({"command": ["set_property", "window-minimized", False]}, 0.8)
+
+        _th.Thread(target=_place, daemon=True).start()
         # 有些片源带假视频轨（防和谐提示画面），自动切到正片轨
         _th.Thread(target=_apply_video_track, daemon=True).start()
     except Exception:

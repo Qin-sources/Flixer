@@ -3189,26 +3189,25 @@ async function mpvCmd(name, value){
 }
 
 function _mpvRect(v){
-  // v3 布局：画面区就是一个明确的 16:9 黑框，mpv 窗口 = 这个框
+  // 画面区就是一个明确的 16:9 黑框：mpv 窗口 = 这个框
+  // 注意：SetWindowPos 用逻辑像素，这里不要乘 devicePixelRatio，否则会放大
   const slot = document.querySelector('.pl-body') || v;
   if (!slot) return null;
   let r;
   try { r = slot.getBoundingClientRect(); } catch(e){ return null; }
   if (r.width < 240 || r.height < 140) return null;
 
-  const dpr = window.devicePixelRatio || 1;
   const chromeH = (window.outerHeight - window.innerHeight) || 0;
+  let px = Math.round(window.screenX + r.left);
+  let py = Math.round(window.screenY + chromeH + r.top);
+  let pw = Math.round(r.width);
+  let ph = Math.round(r.height);
 
-  let px = Math.round((window.screenX + r.left) * dpr);
-  let py = Math.round((window.screenY + chromeH + r.top) * dpr);
-  let pw = Math.round(r.width * dpr);
-  let ph = Math.round(r.height * dpr);
-
-  // 安全夹紧：不超出可用桌面（避免压任务栏）
-  const availW = Math.round((window.screen.availWidth  || window.screen.width)  * dpr);
-  const availH = Math.round((window.screen.availHeight || window.screen.height) * dpr);
-  const originX = Math.round((window.screen.availLeft || 0) * dpr);
-  const originY = Math.round((window.screen.availTop  || 0) * dpr);
+  // 夹紧到可用桌面（逻辑像素），避免压任务栏
+  const availW = window.screen.availWidth  || window.screen.width;
+  const availH = window.screen.availHeight || window.screen.height;
+  const originX = window.screen.availLeft || 0;
+  const originY = window.screen.availTop  || 0;
   if (pw > availW - 16) pw = availW - 16;
   if (ph > availH - 16) ph = availH - 16;
   px = Math.max(originX + 8, Math.min(px, originX + availW - pw - 8));
@@ -3318,6 +3317,27 @@ async function mpvStart(v, d, title){
       fetch('/api/mpv/fit?' + q2.toString(), { method: 'POST' }).catch(() => {});
     };
   } catch(e){}
+
+
+  // 布局稳定后校正一次（起播瞬间侧栏/控制条还没定型，矩形会偏）
+  setTimeout(() => {
+    try {
+      if (!MPV.active) return;
+      const rr = _mpvRect(v);
+      if (!rr) return;
+      const q3 = new URLSearchParams({ x: rr.x, y: rr.y, w: rr.w, h: rr.h });
+      fetch('/api/mpv/fit?' + q3.toString(), { method: 'POST' }).catch(() => {});
+    } catch(e){}
+  }, 900);
+  setTimeout(() => {
+    try {
+      if (!MPV.active) return;
+      const rr = _mpvRect(v);
+      if (!rr) return;
+      const q4 = new URLSearchParams({ x: rr.x, y: rr.y, w: rr.w, h: rr.h });
+      fetch('/api/mpv/fit?' + q4.toString(), { method: 'POST' }).catch(() => {});
+    } catch(e){}
+  }, 1600);
 
   clearInterval(MPV.timer);
   MPV.timer = setInterval(mpvPoll, 1000);
@@ -4673,7 +4693,9 @@ document.addEventListener('keydown', function(e){
 (function(){
   var apply = function(){
     try {
-      var dock = Math.max(0, Math.round((screen.height || 0) - (screen.availHeight || 0)));
+      var sysDock = Math.max(0, Math.round((screen.height || 0) - (screen.availHeight || 0)));
+      // 至少留 56px：即使任务栏是自动隐藏，也不会被它盖住
+      var dock = Math.max(56, sysDock);
       document.documentElement.style.setProperty('--dock', dock + 'px');
     } catch(e){}
   };
