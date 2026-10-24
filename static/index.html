@@ -767,6 +767,39 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
 .pl-wrap:fullscreen .pl-stage,.pl-wrap.pseudo-fs .pl-stage,html.fs-on .pl-stage{padding:0}
 .pl-wrap:fullscreen .pl-body,.pl-wrap.pseudo-fs .pl-body,html.fs-on .pl-body{
   height:100vh;width:100%}
+/* ===== 两套布局分流 + 全屏兜底（必须放最后） ===== */
+/* mpv 模式：16:9 框，便于 mpv 窗口精确贴合 */
+.pl-wrap.mpv-mode .pl-body{
+  width:min(100%, calc((100vh - 214px - var(--dock)) * 16 / 9)) !important;
+  height:auto !important;
+  aspect-ratio:16 / 9 !important;
+  max-height:calc(100vh - 214px - var(--dock)) !important;
+  margin:0 auto !important}
+.pl-wrap.mpv-mode .pl-ctrl{
+  width:min(100%, calc((100vh - 214px - var(--dock)) * 16 / 9)) !important;
+  margin:0 auto !important}
+
+/* 网页原生模式：铺满可用区域（上面 px 规则默认就是铺满，这里只保证 video 行为） */
+.pl-wrap:not(.mpv-mode) .pl-body video{width:100% !important;height:100% !important;object-fit:contain !important}
+
+/* 全屏：两种模式都铺满，控制条浮回底部 */
+.pl-wrap:fullscreen .pl-stage,
+.pl-wrap.pseudo-fs .pl-stage,
+html.fs-on .pl-stage{padding:0 !important;gap:0 !important}
+.pl-wrap:fullscreen .pl-body,
+.pl-wrap.pseudo-fs .pl-body,
+html.fs-on .pl-body,
+.pl-wrap.mpv-mode:fullscreen .pl-body,
+html.fs-on .pl-wrap.mpv-mode .pl-body{
+  width:100% !important;height:100vh !important;max-height:100vh !important;
+  aspect-ratio:auto !important;margin:0 !important}
+.pl-wrap:fullscreen .pl-ctrl,
+.pl-wrap.pseudo-fs .pl-ctrl,
+html.fs-on .pl-ctrl{
+  position:absolute !important;left:0 !important;right:0 !important;bottom:0 !important;
+  width:auto !important;margin:0 !important;height:84px !important;
+  padding:0 28px !important;z-index:9 !important;
+  background:linear-gradient(transparent,rgba(0,0,0,.9)) !important}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -3241,8 +3274,11 @@ function _mpvRect(v){
   let ph = Math.round(r.height);
 
   // 夹紧到可用桌面（逻辑像素），避免压任务栏
-  const availW = window.screen.availWidth  || window.screen.width;
-  const availH = window.screen.availHeight || window.screen.height;
+  // 某些环境（无头/虚拟屏）screen 尺寸不可信，用视口兜底
+  let availW = window.screen.availWidth  || window.screen.width  || 0;
+  let availH = window.screen.availHeight || window.screen.height || 0;
+  if (availW < 1024) availW = Math.max(window.innerWidth  || 0, 1024);
+  if (availH < 600)  availH = Math.max(window.innerHeight || 0, 600);
   const originX = window.screen.availLeft || 0;
   const originY = window.screen.availTop  || 0;
   if (pw > availW - 16) pw = availW - 16;
@@ -3333,6 +3369,7 @@ async function mpvStart(v, d, title){
   } catch(e){ window._mpvBusy = false; return false; }
 
   MPV.active = true;
+  try { document.getElementById('plWrap').classList.add('mpv-mode'); } catch(e){}
   MPV.v = v;
   MPV.fid = d.fid;
   MPV.title = title || '';
@@ -3394,6 +3431,7 @@ async function mpvStop(){
   if (!MPV.active) return;
   try { if (MPV.fullscreen){ MPV.fullscreen = false; await mpvCmd('fullscreen', false); } } catch(e){}
   MPV.active = false;
+  try { document.getElementById('plWrap').classList.remove('mpv-mode'); } catch(e){}
   clearInterval(MPV.timer);
   MPV.timer = null;
   try { await fetch('/api/mpv/quit', { method: 'POST' }); } catch(e){}
