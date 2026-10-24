@@ -189,6 +189,61 @@ def _fit_window(x, y, w, h, tries=12):
         return False
 
 
+
+_GOOD_TITLE = ("original", "正片", "main", "main video", "原片", "正版")
+# 假轨常见标题（防和谐提示画面）
+_BAD_TITLE = ("notice", "warning", "提示", "说明", "声明", "公告", "广告")
+
+
+def _pick_video_track(tracks):
+    """
+    从 mpv track-list 里挑真正的正片视频轨。
+    假轨特征：标题带 original/提示语，或分辨率相同但排在前。
+    """
+    vids = [t for t in tracks if t.get("type") == "video"]
+    if not vids:
+        return None
+    # 先剔除明显的假轨（Notice / 提示 / 广告）
+    _real = [t for t in vids
+             if not any(k in (t.get("title") or "").strip().lower() for k in _BAD_TITLE)]
+    if _real:
+        vids = _real
+    # ① 标题命中关键字的（上传者通常把正片标为 original）
+    for t in vids:
+        title = (t.get("title") or "").strip().lower()
+        if title and any(k in title for k in _GOOD_TITLE):
+            return t.get("id")
+    # ② 分辨率最大的
+    def area(t):
+        return int(t.get("demux-w") or 0) * int(t.get("demux-h") or 0)
+
+    vids_sorted = sorted(vids, key=area, reverse=True)
+    if len(vids_sorted) >= 1:
+        return vids_sorted[0].get("id")
+    return None
+
+
+def _apply_video_track(tries=12):
+    """等容器解析出轨道列表后，切到正片轨"""
+    for _ in range(tries):
+        try:
+            r = _send({"command": ["get_property", "track-list"]}, 0.8)
+            tracks = (r or {}).get("data")
+            if isinstance(tracks, list) and tracks:
+                vids = [t for t in tracks if t.get("type") == "video"]
+                if len(vids) <= 1:
+                    return True
+                want = _pick_video_track(tracks)
+                cur = _get("vid", 0.6)
+                if want is not None and str(want) != str(cur):
+                    _send({"command": ["set_property", "vid", want]}, 0.8)
+                return True
+        except Exception:
+            pass
+        time.sleep(0.25)
+    return False
+
+
 def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     global _fid
     _ensure()
@@ -212,6 +267,8 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     try:
         import threading as _th
         _th.Thread(target=_fit_window, args=(x, y, w, h), daemon=True).start()
+        # 有些片源带假视频轨（防和谐提示画面），自动切到正片轨
+        _th.Thread(target=_apply_video_track, daemon=True).start()
     except Exception:
         pass
 
