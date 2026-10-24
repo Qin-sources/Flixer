@@ -717,6 +717,19 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
 .pl-ctrl .pl-row #plAudio{order:6}
 .pl-ctrl .pl-row #plSub{order:7}
 .pl-ctrl .pl-row #plFull{order:8}
+/* ===== 控制条最终顺序 ===== */
+.pl-ctrl .pl-row{display:flex;align-items:center;gap:14px;width:100%}
+.pl-ctrl .pl-row > #plToggle{order:1}
+.pl-ctrl .pl-row > #plTime{order:2}
+.pl-ctrl .pl-row > .pl-grow{order:3;flex:1 1 auto;min-width:160px}
+.pl-ctrl .pl-row > .pl-vol{order:4}
+.pl-ctrl .pl-row > #plPip{order:5}
+.pl-ctrl .pl-row > #plAudio{order:6}
+.pl-ctrl .pl-row > #plCC{order:7}
+.pl-ctrl .pl-row > #plFull{order:8}
+/* 进度条铺满它的容器 */
+.pl-ctrl .pl-grow #plProg,.pl-ctrl .pl-grow .pl-prog{width:100%;height:3px;
+  background:#3a3a3a;position:relative;cursor:pointer;border-radius:0}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
