@@ -303,7 +303,9 @@ def merge_and_rank(lists, query, original_title, year, is_tv,
             m = re.search(r"btih:([0-9a-fA-F]{40})", r.get("pan_url") or "")
             key = (m.group(1).lower() if m else (r.get("pan_url") or "")[:80])
         else:
-            key = "nt|" + (_norm(r.get("title") or "")[:40]) + "|" + pt
+            # 按分享链接去重：同一部片的不同分享要全部保留
+            u = (r.get("pan_url") or "").strip().split("#")[0].rstrip("/")
+            key = "nt|" + pt + "|" + u.lower()
         if key not in by_key or r["score"] > by_key[key]["score"]:
             by_key[key] = r
     out = list(by_key.values())
