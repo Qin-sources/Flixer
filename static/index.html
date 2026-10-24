@@ -1426,6 +1426,7 @@ if (document.readyState !== 'loading'){
 }
 
 function closePlayer(){
+  try { mpvStop(); } catch(e){}
   try { const c = document.querySelector('.aud-card'); if (c) c.remove(); _audCardShown = false; } catch(e){}
   // 收起音轨/字幕面板，否则会留在首页上
   try {
@@ -1629,7 +1630,16 @@ function bindPlayerUI(){
   if (fullB){
     const _fsToggle = (ev) => {
       if (ev){ ev.preventDefault(); ev.stopPropagation(); }
-      if (_fsEl() || _pseudoFS) _exitFS(); else _enterFS();
+      if (typeof MPV !== 'undefined' && MPV.active){
+    const on = !MPV.fullscreen;
+    MPV.fullscreen = on;
+    try { mpvCmd('fullscreen', on); } catch(e){}
+    if (fullB) fullB.innerHTML = on
+      ? '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'
+      : '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+    return;
+  }
+  if (_fsEl() || _pseudoFS) _exitFS(); else _enterFS();
     };
     fullB.onclick = _fsToggle;
     // 捕获阶段先拦，避免被 stage 的点击逻辑吃掉
@@ -2885,11 +2895,165 @@ function showExtNotice(title, onWeb){
   setTimeout(close, 15000);   // 15 秒后自动收起
 }
 
+
+/* ══════ mpv 遥控（B 方案）══════ */
+const MPV = { active: false, fid: '', title: '', time: 0, duration: 0,
+              paused: false, volume: 1, muted: false, fullscreen: false,
+              timer: null, v: null };
+
+async function mpvCmd(name, value){
+  try {
+    const q = new URLSearchParams({ name: name });
+    if (value !== undefined && value !== null) q.set('value', String(value));
+    const r = await fetch('/api/mpv/cmd?' + q.toString(), { method: 'POST' });
+    const j = await r.json();
+    return j && j.ok;
+  } catch(e){ return false; }
+}
+
+function _mpvRect(v){
+  // 依次尝试：画面容器 → 视频元素 → 舞台
+  // （起播瞬间 video 还没有内在尺寸，高度可能是 0）
+  const pick = [];
+  try { pick.push(document.querySelector('.pl-body')); } catch(e){}
+  if (v) pick.push(v);
+  try { pick.push(document.querySelector('.pl-stage')); } catch(e){}
+  const chromeH = (window.outerHeight - window.innerHeight) || 0;
+  for (const el of pick){
+    if (!el) continue;
+    let r;
+    try { r = el.getBoundingClientRect(); } catch(e){ continue; }
+    if (r.width < 320 || r.height < 200) continue;
+    return {
+      x: Math.round(window.screenX + r.left),
+      y: Math.round(window.screenY + chromeH + r.top),
+      w: Math.round(r.width),
+      h: Math.round(r.height)
+    };
+  }
+  return null;
+}
+
+function mpvInstallProxy(v){
+  const def = (name, get, set) => {
+    try { Object.defineProperty(v, name, { configurable: true, enumerable: true, get: get, set: set }); }
+    catch(e){}
+  };
+  def('currentTime', () => MPV.time, (x) => {
+    const t = Math.max(0, Number(x) || 0);
+    MPV.time = t;
+    mpvCmd('seek', t);
+  });
+  def('duration', () => MPV.duration);
+  def('paused', () => MPV.paused);
+  def('volume', () => MPV.volume, (x) => {
+    const val = Math.max(0, Math.min(1, Number(x) || 0));
+    MPV.volume = val;
+    mpvCmd('volume', val * 100);
+  });
+  def('muted', () => MPV.muted, (x) => {
+    MPV.muted = !!x;
+    mpvCmd('mute', !!x);
+  });
+  def('buffered', () => ({ length: 0 }));
+  v.play = () => { MPV.paused = false; mpvCmd('pause', false); return Promise.resolve(); };
+  v.pause = () => { MPV.paused = true; mpvCmd('pause', true); };
+}
+
+async function mpvPoll(){
+  if (!MPV.active) return;
+  try {
+    const j = await (await fetch('/api/mpv/status')).json();
+    const d = (j && j.data) || {};
+    if (!d.running){
+      MPV.time = 0;
+      return;
+    }
+    MPV.time = Number(d.time) || 0;
+    MPV.duration = Number(d.duration) || 0;
+    MPV.paused = !!d.pause;
+    MPV.volume = Math.max(0, Math.min(1, (Number(d.volume) || 0) / 100));
+    MPV.muted = !!d.mute;
+    MPV.fullscreen = !!d.fullscreen;
+    if (!MPV.duration && MPV.fid && !MPV._reloadTried){
+      MPV._reloadTried = true;
+      try {
+        const vr = _mpvRect(MPV.v);
+        if (vr){
+          const q = new URLSearchParams({ fid: MPV.fid, title: MPV.title || '',
+            x: vr.x, y: vr.y, w: vr.w, h: vr.h });
+          fetch('/api/mpv/play?' + q.toString(), { method: 'POST' }).catch(()=>{});
+        }
+      } catch(e){}
+    }
+    // 让现有 UI 重绘（paint 绑在 video 事件上，这里手动触发一次）
+    try { MPV.v && MPV.v.dispatchEvent(new Event('timeupdate')); } catch(e){}
+  } catch(e){}
+}
+
+async function mpvStart(v, d, title){
+  if (!v || !d || !d.fid) return false;
+  let rect = _mpvRect(v);
+  if (!rect){
+    for (let i = 0; i < 10 && !rect; i++){
+      await new Promise(res => setTimeout(res, 150));
+      rect = _mpvRect(v);
+    }
+  }
+  if (!rect) return false;
+  const q = new URLSearchParams({
+    fid: d.fid, title: title || d.name || '',
+    x: rect.x, y: rect.y, w: rect.w, h: rect.h
+  });
+  try {
+    const r = await fetch('/api/mpv/play?' + q.toString(), { method: 'POST' });
+    const j = await r.json();
+    if (!j || !j.ok) return false;
+  } catch(e){ return false; }
+
+  MPV.active = true;
+  MPV.v = v;
+  MPV.fid = d.fid;
+  MPV.title = title || '';
+  MPV.time = 0;
+  MPV.duration = Number(d.duration_sec) || 0;
+  MPV.paused = false;
+  MPV.volume = 1;
+  MPV.muted = false;
+
+  try { v.removeAttribute('src'); v.load(); } catch(e){}
+  mpvInstallProxy(v);
+
+  clearInterval(MPV.timer);
+  MPV.timer = setInterval(mpvPoll, 1000);
+  setTimeout(mpvPoll, 300);
+
+  // 装完代理后确保真的在播（页面里的自动播放逻辑可能把它按停了）
+  setTimeout(() => {
+    try {
+      if (!MPV.active) return;
+      if (MPV.time <= 0.05) mpvCmd('pause', false);
+    } catch(e){}
+  }, 1200);
+  return true;
+}
+
+async function mpvStop(){
+  if (!MPV.active) return;
+  try { if (MPV.fullscreen){ MPV.fullscreen = false; await mpvCmd('fullscreen', false); } } catch(e){}
+  MPV.active = false;
+  clearInterval(MPV.timer);
+  MPV.timer = null;
+  try { await fetch('/api/mpv/quit', { method: 'POST' }); } catch(e){}
+  MPV.v = null;
+}
+
 async function playQuark(url, pwd, title, ep){
   const myToken = ++_plToken;
   const w = $('#plWrap');
   const b = $('#plBody');
   const alive = () => (myToken === _plToken);
+let _mpvOn = false;   // mpv 接管标记（B 方案）
 
   // 记住滚动位置，关闭时还原
   _plScroll = ($('#detailWrap') || document.body).scrollTop || window.scrollY || 0;
@@ -3000,7 +3164,7 @@ async function playQuark(url, pwd, title, ep){
   }
 
   // 杜比音轨：自动启用 AAC 流（不换片源，视频静音、声音走转码流）
-  if (d.audio_info && d.audio_info.browser_ok === false && d.fid){
+  if (!_mpvOn && !(typeof MPV !== 'undefined' && MPV.active) && d.audio_info && d.audio_info.browser_ok === false && d.fid){
     setTimeout(async () => {
       if (!alive()) return;
       if (window._preferWeb !== true){
@@ -3058,13 +3222,24 @@ async function playQuark(url, pwd, title, ep){
   if (!alive()) return;   // 旧请求不许写回画面
   b.innerHTML = '<video id="plVideo" autoplay playsinline preload="auto"></video>';
   const v = $('#plVideo');
+// B 方案：优先交给 mpv（本地原生解码 + 秒拖），失败再回退网页播放
+if (window._preferWebPlayer !== true){
+  try { _mpvOn = await mpvStart(v, d, title || d.name); } catch(e){ _mpvOn = false; }
+  if (!alive()) return;
+  if (_mpvOn){
+    // mpv 模式下 video 没有 src，不会触发 loadeddata，
+    // 控制条必须在这里手动绑定，否则按钮、快捷键全部失效
+    try { plVeilHide(); } catch(e){}
+    try { bindPlayerUI(); } catch(e){}
+  }
+}
   // 告诉音轨面板当前文件
   try { AST.fid = d.fid || ''; AST.aac = null; AST.cur = 0; }
   catch(e){}
   renderSubs(d);
 
   plVeil('正在缓冲…');
-  v.src = d.stream;
+  if (!_mpvOn) v.src = d.stream;
 
   /* 静音状态同步（带图标反馈） */
   const setMuted = (on) => {
