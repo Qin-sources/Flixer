@@ -311,19 +311,10 @@ def api_open_mpv():
         w, h = 1280, 720
         x = y = 0
 
-    args = [exe, url,
-            "--no-border",
-            "--ontop",
-            "--force-window=yes",
-            "--title=" + title[:60],
-            "--geometry=%dx%d+%d+%d" % (w, h, max(0, x), max(0, y)),
-            "--hwdec=auto-safe",
-            "--keep-open=no",
-            "--no-input-default-bindings",
-            r"--input-ipc-server=\\.\pipe\flixer-mpv"]
+    # 复用带 IPC 的实例，避免出现两个窗口
+    from services import mpvctl as MPV
     try:
-        _sp.Popen(args, close_fds=True,
-                  creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0))
+        MPV.play(url, title, max(0, x), max(0, y), w, h, fid)
     except Exception as ex:
         return err("启动 mpv 失败: %s" % ex, 500)
     return ok({"opened": True, "player": exe, "url": url,

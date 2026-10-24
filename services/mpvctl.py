@@ -122,7 +122,7 @@ def _ensure_locked():
         raise IOError("未找到 mpv")
     if _proc is None or _proc.poll() is not None:
         args = [_MPV, "--no-config", "--idle=yes", "--force-window=yes",
-                "--no-border", "--ontop", "--no-input-default-bindings",
+                "--no-border", "--ontop", 
                 "--keep-open=no", "--hwdec=auto-safe", "--osc=no",
                 "--input-ipc-server=" + PIPE_NAME]
         _proc = subprocess.Popen(args, stdout=subprocess.DEVNULL,

@@ -2993,6 +2993,8 @@ async function mpvPoll(){
 
 async function mpvStart(v, d, title){
   if (!v || !d || !d.fid) return false;
+  window._mpvBusy = true;   // 同步标记：防止别的路径再起一个播放器
+
   let rect = _mpvRect(v);
   if (!rect){
     for (let i = 0; i < 10 && !rect; i++){
@@ -3009,7 +3011,7 @@ async function mpvStart(v, d, title){
     const r = await fetch('/api/mpv/play?' + q.toString(), { method: 'POST' });
     const j = await r.json();
     if (!j || !j.ok) return false;
-  } catch(e){ return false; }
+  } catch(e){ window._mpvBusy = false; return false; }
 
   MPV.active = true;
   MPV.v = v;
@@ -3164,7 +3166,7 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
   }
 
   // 杜比音轨：自动启用 AAC 流（不换片源，视频静音、声音走转码流）
-  if (!_mpvOn && !(typeof MPV !== 'undefined' && MPV.active) && d.audio_info && d.audio_info.browser_ok === false && d.fid){
+  if (!_mpvOn && !window._mpvBusy && !(typeof MPV !== 'undefined' && MPV.active) && d.audio_info && d.audio_info.browser_ok === false && d.fid){
     setTimeout(async () => {
       if (!alive()) return;
       if (window._preferWeb !== true){
