@@ -1,0 +1,27 @@
+﻿# 依赖与大文件（不进版本库）
+data/
+bin/ffmpeg.exe
+bin/mpv/
+bin/*.7z
+node_modules/
+
+# 运行时产物
+*.log
+srv.log
+srv.err
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 我的临时脚本与产物
+_*.py
+_*.png
+_*.mp4
+_*.aac
+_*.log
+*.bak
+*.fixbak
+
+# 系统
+Thumbs.db
+desktop.ini

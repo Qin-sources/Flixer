@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="178" viewBox="0 0 100 178">
+  <defs>
+    <linearGradient id="nflx" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e50914"/>
+      <stop offset="0.55" stop-color="#b20710"/>
+      <stop offset="1" stop-color="#8b0000"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#nflx)">
+    <!-- 左竖杠 -->
+    <path d="M0,0 h18 v178 h-18 Z"/>
+    <!-- 右竖杠 -->
+    <path d="M82,0 h18 v178 h-18 Z"/>
+    <!-- 中间斜杠：从左上到底右 -->
+    <path d="M0,0 L18,0 L100,178 L82,178 Z" opacity="1"/>
+  </g>
+</svg>
