@@ -213,8 +213,8 @@ def api_mpv_fit():
             return d
     x, y = _n("x"), _n("y")
     w, h = _n("w", 900), _n("h", 500)
-    ok = MPV.fit(x, y, w, h)
-    return ok({"fitted": bool(ok), "rect": [x, y, w, h]})
+    fitted = MPV.fit(x, y, w, h)
+    return ok({"fitted": bool(fitted), "rect": [x, y, w, h]})
 
 
 @app.route("/api/mpv/play", methods=["POST", "GET"])
