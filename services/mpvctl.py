@@ -121,7 +121,7 @@ def _ensure_locked():
     if not available():
         raise IOError("未找到 mpv")
     if _proc is None or _proc.poll() is not None:
-        args = [_MPV, "--no-config", "--idle=yes", "--force-window=yes",
+        args = [_MPV, "--no-config", "--idle=yes", "--force-window=no",
                 "--no-border", "--ontop", "--focus-on=never", "--keepaspect-window=no", "--hidpi-window-scale=no", 
                 "--keep-open=no", "--hwdec=auto-safe", "--osc=no",
                 "--input-ipc-server=" + PIPE_NAME]
@@ -289,6 +289,7 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     _send({"command": ["set_property", "geometry", geo]}, 1.0)
     if title:
         _send({"command": ["set_property", "title", title[:60]]}, 1.0)
+    _send({"command": ["set_property", "force-window", True]}, 1.0)
     _send({"command": ["set_property", "pause", False]}, 1.0)
     r = _send({"command": ["loadfile", url]}, 3.0)
     _fid = fid
