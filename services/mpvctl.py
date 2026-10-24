@@ -164,10 +164,22 @@ def _find_hwnd(pid):
         return None
 
 
-def _fit_window(x, y, w, h, tries=45):
+def _window_rect(hwnd):
+    """读窗口当前屏幕矩形 (x, y, w, h)"""
+    try:
+        import ctypes
+        import ctypes.wintypes as wt
+        r = wt.RECT()
+        ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(r))
+        return (r.left, r.top, r.right - r.left, r.bottom - r.top)
+    except Exception:
+        return None
+
+
+def _fit_window(x, y, w, h, tries=40):
     """
-    把 mpv 窗口精确移到 (x, y) 尺寸 (w, h)。
-    mpv 启动后窗口会变几次，所以重试若干次直到稳定。
+    把 mpv 窗口摆到 (x, y) 尺寸 (w, h)。
+    每轮先比对当前矩形：已经贴合就立刻返回（避免反复 SetWindowPos 造成闪烁）。
     """
     if not is_running() or not _proc:
         return False
@@ -176,15 +188,22 @@ def _fit_window(x, y, w, h, tries=45):
         user32 = ctypes.windll.user32
         SWP_NOZORDER = 0x0004
         SWP_NOACTIVATE = 0x0010
-        ok = False
         for _ in range(tries):
             hwnd = _find_hwnd(_proc.pid)
             if hwnd:
-                user32.SetWindowPos(hwnd, 0, int(x), int(y), int(w), int(h),
-                                    SWP_NOZORDER | SWP_NOACTIVATE)
-                ok = True
-            time.sleep(0.15)
-        return ok
+                cur = _window_rect(hwnd)
+                if cur:
+                    cx, cy, cw, ch = cur
+                    if (abs(cx - x) <= 2 and abs(cy - y) <= 2
+                            and abs(cw - w) <= 2 and abs(ch - h) <= 2):
+                        return True          # 已到位，停手（不再动窗口）
+                    user32.SetWindowPos(hwnd, 0, int(x), int(y), int(w), int(h),
+                                        SWP_NOZORDER | SWP_NOACTIVATE)
+            else:
+                time.sleep(0.2)
+                continue
+            time.sleep(0.22)
+        return True
     except Exception:
         return False
 

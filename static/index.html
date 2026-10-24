@@ -574,6 +574,70 @@ html.fs-on .pl-side.on{width:300px;height:100%}
 .aac-badge{font-size:11.5px;color:#4ed77b;background:rgba(62,207,106,.14);
   border-radius:4px;padding:2px 8px;margin-left:4px;white-space:nowrap}
 
+
+/* ===== 播放页 Netflix 风格（画面区在上、控制条在下） ===== */
+.pl-wrap{background:#000}
+.pl-main{background:#000}
+
+/* 画面区：16:9，贴黑无边框 */
+.pl-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:18px;padding:70px 28px 22px;background:#000}
+.pl-body{position:relative;inset:auto;flex:none;
+  width:min(100%, calc((100vh - 214px) * 16 / 9));
+  height:auto;max-height:calc(100vh - 214px);
+  aspect-ratio:16 / 9;
+  background:#000;border:0;border-radius:0;overflow:hidden}
+.pl-body video{width:100%;height:100%;max-width:none;max-height:none;object-fit:contain}
+
+/* 控制条：黑框下方，极简 */
+.pl-ctrl{position:relative;left:auto;right:auto;bottom:auto;
+  width:min(100%, calc((100vh - 214px) * 16 / 9));
+  height:52px;padding:0;background:none;display:flex;align-items:center;gap:18px}
+
+/* 进度条：3px，红色填充，无圆角 */
+.pl-ctrl .pl-prog,.pl-ctrl #prog{height:3px;border-radius:0;background:#404040}
+.pl-ctrl .pl-prog .p-played,.pl-ctrl #played{background:#e50914;border-radius:0}
+.pl-ctrl .knob,#knob{width:13px;height:13px;margin-top:-5px;box-shadow:none}
+
+/* 按钮与文字：细线、灰色、不喧哗 */
+.pl-ctrl button,.pl-ctrl .pl-b{background:none;border:0;color:#e5e5e5;opacity:.92}
+.pl-ctrl button:hover,.pl-ctrl .pl-b:hover{opacity:1;background:none}
+.pl-ctrl .pl-time,#plTime{font-size:12.5px;color:#a8a8a8;letter-spacing:.2px;
+  font-variant-numeric:tabular-nums;font-weight:400}
+
+/* 顶部信息条：从黑渐变 */
+.pl-top{background:linear-gradient(180deg,rgba(0,0,0,.92),rgba(0,0,0,0));
+  padding:18px 30px}
+.pl-top .pl-title,#plTitle{font-size:21px;font-weight:600;letter-spacing:.2px}
+.pl-top .pl-sub,#plSub{font-size:12.5px;color:#a0a0a0;font-weight:400;margin-top:3px}
+
+/* 右侧栏：无描边，细线分隔 */
+.pl-side{background:#000;border-left:1px solid #1a1a1a}
+.pl-side.on{width:300px}
+.pl-side-inner{padding:26px 22px}
+.pl-side h4{font-size:11px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600;
+  text-transform:uppercase;margin:26px 0 12px}
+.pl-side h4:first-child{margin-top:0}
+.pl-side .pl-eps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pl-side .pl-eps button{height:34px;background:#141414;border:1px solid #1f1f1f;
+  border-radius:3px;color:#bdbdbd;font-size:12.5px;font-weight:500}
+.pl-side .pl-eps button:hover{background:#1f1f1f;border-color:#2c2c2c;color:#fff}
+.pl-side .pl-eps button.on{background:#e50914;border-color:#e50914;color:#fff;font-weight:700}
+.pl-side .pl-info-title{font-size:15px;font-weight:600;color:#fff;letter-spacing:.2px}
+.pl-side .pl-info-meta{font-size:12px;color:#9a9a9a;line-height:2;font-weight:400}
+.pl-side .pl-info-meta b{color:#dcdcdc;font-weight:500}
+
+/* 全屏：画面铺满，控制条浮回底部 */
+.pl-wrap:fullscreen .pl-stage,
+.pl-wrap.pseudo-fs .pl-stage,
+html.fs-on .pl-stage{padding:0;gap:0}
+.pl-wrap:fullscreen .pl-body,
+.pl-wrap.pseudo-fs .pl-body,
+html.fs-on .pl-body{width:100%;height:100%;max-height:100vh;aspect-ratio:auto}
+.pl-wrap:fullscreen .pl-ctrl,
+.pl-wrap.pseudo-fs .pl-ctrl,
+html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:84px;
+  padding:0 28px;background:linear-gradient(transparent,rgba(0,0,0,.9));z-index:9}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -2965,44 +3029,32 @@ async function mpvCmd(name, value){
 }
 
 function _mpvRect(v){
-  // 目标：播放区里居中、约 72% 大小，且完全落在可用桌面区域内（不压任务栏）
-  const stage = document.querySelector('.pl-stage') || document.querySelector('.pl-body') || v;
-  if (!stage) return null;
+  // v3 布局：画面区就是一个明确的 16:9 黑框，mpv 窗口 = 这个框
+  const slot = document.querySelector('.pl-body') || v;
+  if (!slot) return null;
   let r;
-  try { r = stage.getBoundingClientRect(); } catch(e){ return null; }
+  try { r = slot.getBoundingClientRect(); } catch(e){ return null; }
   if (r.width < 240 || r.height < 140) return null;
 
   const dpr = window.devicePixelRatio || 1;
   const chromeH = (window.outerHeight - window.innerHeight) || 0;
 
-  // 可用桌面（浏览器拿到的 avail*）→ 物理像素
+  let px = Math.round((window.screenX + r.left) * dpr);
+  let py = Math.round((window.screenY + chromeH + r.top) * dpr);
+  let pw = Math.round(r.width * dpr);
+  let ph = Math.round(r.height * dpr);
+
+  // 安全夹紧：不超出可用桌面（避免压任务栏）
   const availW = Math.round((window.screen.availWidth  || window.screen.width)  * dpr);
   const availH = Math.round((window.screen.availHeight || window.screen.height) * dpr);
   const originX = Math.round((window.screen.availLeft || 0) * dpr);
   const originY = Math.round((window.screen.availTop  || 0) * dpr);
+  if (pw > availW - 16) pw = availW - 16;
+  if (ph > availH - 16) ph = availH - 16;
+  px = Math.max(originX + 8, Math.min(px, originX + availW - pw - 8));
+  py = Math.max(originY + 8, Math.min(py, originY + availH - ph - 8));
 
-  // 播放区中心的屏幕坐标（物理像素）
-  const cx = (window.screenX + r.left + r.width / 2) * dpr;
-  const cy = (window.screenY + chromeH + r.top + r.height / 2) * dpr;
-
-  // 尺寸：播放区的 72%，同时不超过可用桌面的 78%
-  let w = Math.round(r.width * dpr * 0.72);
-  let h = Math.round(r.height * dpr * 0.72);
-  const maxW = Math.round(availW * 0.78);
-  const maxH = Math.round(availH * 0.78);
-  if (w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
-  if (h > maxH){ w = Math.round(w * maxH / h); h = maxH; }
-  if (w < 320) w = 320;
-  if (h < 180) h = 180;
-
-  // 居中，然后夹紧到可用区域内（底部至少留 12px 给任务栏）
-  let x = Math.round(cx - w / 2);
-  let y = Math.round(cy - h / 2);
-  const pad = 12;
-  x = Math.max(originX + pad, Math.min(x, originX + availW - w - pad));
-  y = Math.max(originY + pad, Math.min(y, originY + availH - h - pad));
-
-  return { x: x, y: y, w: w, h: h };
+  return { x: px, y: py, w: pw, h: ph };
 }
 
 function mpvInstallProxy(v){
@@ -3105,8 +3157,7 @@ async function mpvStart(v, d, title){
       const q2 = new URLSearchParams({ x: rr.x, y: rr.y, w: rr.w, h: rr.h });
       fetch('/api/mpv/fit?' + q2.toString(), { method: 'POST' }).catch(() => {});
     };
-    setTimeout(_refit, 1500);
-    setTimeout(_refit, 4000);
+    setTimeout(_refit, 1800);
   } catch(e){}
 
   clearInterval(MPV.timer);
