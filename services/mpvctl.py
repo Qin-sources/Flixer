@@ -176,7 +176,7 @@ def _window_rect(hwnd):
         return None
 
 
-def _fit_window(x, y, w, h, tries=40):
+def _fit_window(x, y, w, h, tries=12):
     """
     把 mpv 窗口摆到 (x, y) 尺寸 (w, h)。
     每轮先比对当前矩形：已经贴合就立刻返回（避免反复 SetWindowPos 造成闪烁）。
@@ -194,8 +194,8 @@ def _fit_window(x, y, w, h, tries=40):
                 cur = _window_rect(hwnd)
                 if cur:
                     cx, cy, cw, ch = cur
-                    if (abs(cx - x) <= 2 and abs(cy - y) <= 2
-                            and abs(cw - w) <= 2 and abs(ch - h) <= 2):
+                    if (abs(cx - x) <= 10 and abs(cy - y) <= 10
+                            and abs(cw - w) <= 10 and abs(ch - h) <= 10):
                         return True          # 已到位，停手（不再动窗口）
                     user32.SetWindowPos(hwnd, 0, int(x), int(y), int(w), int(h),
                                         SWP_NOZORDER | SWP_NOACTIVATE)

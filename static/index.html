@@ -730,6 +730,13 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
 /* 进度条铺满它的容器 */
 .pl-ctrl .pl-grow #plProg,.pl-ctrl .pl-grow .pl-prog{width:100%;height:3px;
   background:#3a3a3a;position:relative;cursor:pointer;border-radius:0}
+/* ===== 收尾：任务栏留位 ===== */
+:root{--dock:0px}
+.pl-wrap{inset:0 0 var(--dock) 0}
+.pl-wrap:fullscreen,.pl-wrap.pseudo-fs,html.fs-on .pl-wrap{inset:0}
+
+/* 电影：没有选集时隐藏标题与区块 */
+.pl-side.no-eps #plEpsHead,.pl-side.no-eps #plEps{display:none}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -933,6 +940,17 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
     } catch(e){}
   }
 
+  // 播放期的轮询/切换请求会正常中断，这些不算错误
+  function _noise(msg){
+    var t = String(msg || '');
+    return t.indexOf('/api/mpv/') >= 0
+        || t.indexOf('ERR_ABORTED') >= 0
+        || t.indexOf('The play() request was interrupted') >= 0
+        || t.indexOf('The operation was aborted') >= 0
+        || t.indexOf('/api/subtitle') >= 0
+        || t.indexOf('/api/audio') >= 0;
+  }
+
   window.addEventListener('error', function(ev){
     var t = ev.target;
     if (t && t.tagName && (t.tagName === 'IMG' || t.tagName === 'VIDEO' || t.tagName === 'SCRIPT')){
@@ -942,12 +960,15 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
       bar('资源加载失败: ' + src.slice(0, 120), 'resource');
       return;
     }
+    if (_noise(ev.message)) return;
     bar((ev.message || 'error') + ' @ ' + (ev.filename || '') + ':' + (ev.lineno || 0), 'js');
   }, true);
 
   window.addEventListener('unhandledrejection', function(ev){
     var r = ev.reason;
-    bar((r && (r.stack || r.message)) ? String(r.stack || r.message).split('\n')[0] : String(r), 'promise');
+    var msg = (r && (r.stack || r.message)) ? String(r.stack || r.message) : String(r);
+    if (_noise(msg)) return;
+    bar(msg.split('\n')[0], 'promise');
   });
 
   window.__flxErr = bar;
@@ -2102,7 +2123,8 @@ function plVeil(msg, opts){
   v.classList.remove('hide');
   const sp = v.querySelector('.sp');
   if (sp) sp.style.display = opts.spinner === false ? 'none' : '';
-  $('#plVeilMsg').innerHTML = msg;
+  const box = $('#plVeilMsg');      // 元素可能已被重建，判空再用
+  if (box) box.innerHTML = msg;
 }
 
 function plVeilHide(){
@@ -2831,14 +2853,50 @@ function showAudioWarn(label){
   };
 }
 
+/* 电影信息（替代选集区） */
+function fillMovieInfo(d, title){
+  try {
+    const t = $('#plInfoTitle');
+    const m = $('#plInfoMeta');
+    if (!t || !m) return;
+    const name = (title || d.name || '').replace(/\.[a-z0-9]{2,4}$/i, '');
+    const clean = name
+      .replace(/全\s*\d+\s*集/g, '')
+      .replace(/内嵌[^\s]*/g, '')
+      .replace(/中英?字幕|官方中字/g, '')
+      .replace(/\b(2160p|1080p|720p|4K|HDR|DV)\b/gi, '')
+      .replace(/\s{2,}/g, ' ').trim();
+    t.textContent = clean || name || '影片';
+    const rows = [];
+    if (d.size) rows.push(['大小', (d.size / 1073741824).toFixed(2) + ' GB']);
+    if (d.ext) rows.push(['格式', String(d.ext).replace('.', '').toUpperCase()]);
+    const ai = d.audio_info || {};
+    if (ai.label) rows.push(['音轨', ai.label]);
+    if (d.video_info && d.video_info.codecs && d.video_info.codecs.length)
+      rows.push(['视频', d.video_info.codecs.join(' / ').toUpperCase()]);
+    rows.push(['播放', (typeof MPV !== 'undefined' && MPV.active) ? 'mpv 原画' : '网页原生']);
+    m.innerHTML = rows.map(function(r){
+      return '<div style="display:flex;justify-content:space-between">'
+        + '<span>' + esc(r[0]) + '</span><b>' + esc(String(r[1])) + '</b></div>';
+    }).join('');
+  } catch(e){}
+}
+
 function renderEpisodes(d, url, pwd, title){
   const box = $('#plEps');
   if (!box) return;
   const eps = d.episodes || [];
+  const side = document.getElementById('plSide');
   if (eps.length <= 1){
+    // 电影：不要选集，侧栏展示电影信息
     box.innerHTML = '';
+    if (side) side.classList.add('no-eps');
+    const head = $('#plEpsHead');
+    if (head) head.textContent = '';
+    fillMovieInfo(d, title);
     return;
   }
+  if (side) side.classList.remove('no-eps');
   const cur = (typeof d.ep_index === 'number') ? d.ep_index : 0;
   const btns = eps.map(e => {
           const label = String(e.i + 1);
@@ -3259,7 +3317,6 @@ async function mpvStart(v, d, title){
       const q2 = new URLSearchParams({ x: rr.x, y: rr.y, w: rr.w, h: rr.h });
       fetch('/api/mpv/fit?' + q2.toString(), { method: 'POST' }).catch(() => {});
     };
-    setTimeout(_refit, 1800);
   } catch(e){}
 
   clearInterval(MPV.timer);
@@ -4610,6 +4667,18 @@ document.addEventListener('keydown', function(e){
   };
   window.addEventListener('scroll', record, { passive: true });
   try { record(); } catch(e){}
+})();
+
+/* 计算任务栏高度，给播放页留出位置（整页上移） */
+(function(){
+  var apply = function(){
+    try {
+      var dock = Math.max(0, Math.round((screen.height || 0) - (screen.availHeight || 0)));
+      document.documentElement.style.setProperty('--dock', dock + 'px');
+    } catch(e){}
+  };
+  apply();
+  window.addEventListener('resize', apply);
 })();
 </script>
 </body>
