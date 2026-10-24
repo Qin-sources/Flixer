@@ -724,37 +724,76 @@ html.fs-on .pl-side.on{width:300px;height:100%}
 <script src="/vendor/motion.js"></script>
 <script>
 
-/* ===== 可见错误提示（临时诊断，修好后可删） ===== */
+/* ===== 可见错误提示：10 秒自动消失 + 知道了 ===== */
 (function(){
   var shown = 0;
+  var hideTimer = null;
+
+  function ensureBar(){
+    var d = document.getElementById('flx-errbar');
+    if (d) return d;
+    d = document.createElement('div');
+    d.id = 'flx-errbar';
+    d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;'
+      + 'background:#7a0b12;color:#fff;font:12px/1.6 monospace;padding:8px 12px 8px 12px;'
+      + 'max-height:32vh;overflow:auto;white-space:pre-wrap;pointer-events:auto;'
+      + 'transition:opacity .35s ease;display:flex;gap:12px;align-items:flex-start';
+    var txt = document.createElement('div');
+    txt.id = 'flx-errtext';
+    txt.style.cssText = 'flex:1;min-width:0';
+    var ok = document.createElement('button');
+    ok.textContent = '知道了';
+    ok.style.cssText = 'flex:none;border:none;border-radius:4px;padding:3px 10px;'
+      + 'background:#fff;color:#7a0b12;font-size:11px;font-weight:700;cursor:pointer;'
+      + 'font-family:inherit;margin-top:2px';
+    ok.onclick = dismiss;
+    d.appendChild(txt);
+    d.appendChild(ok);
+    (document.body || document.documentElement).appendChild(d);
+    return d;
+  }
+
+  function dismiss(){
+    var d = document.getElementById('flx-errbar');
+    if (!d) return;
+    d.style.opacity = '0';
+    setTimeout(function(){ try { d.remove(); } catch(e){} }, 400);
+  }
+
+  function scheduleHide(){
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(dismiss, 10000);   // 10 秒自动消失
+  }
+
   function bar(msg, kind){
     try {
-      if (shown >= 4) return;
+      if (shown >= 6) return;
       shown++;
-      var d = document.getElementById('flx-errbar');
-      if (!d){
-        d = document.createElement('div');
-        d.id = 'flx-errbar';
-        d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;'
-          + 'background:#7a0b12;color:#fff;font:12px/1.5 monospace;padding:8px 12px;'
-          + 'max-height:38vh;overflow:auto;white-space:pre-wrap;pointer-events:auto';
-        (document.body || document.documentElement).appendChild(d);
-      }
-      d.textContent += '[' + kind + '] ' + msg + '\n';
+      var d = ensureBar();
+      var txt = d.querySelector('#flx-errtext');
+      if (txt) txt.textContent += '[' + kind + '] ' + msg + '\n';
+      d.style.opacity = '1';
+      scheduleHide();
     } catch(e){}
   }
+
   window.addEventListener('error', function(ev){
     var t = ev.target;
     if (t && t.tagName && (t.tagName === 'IMG' || t.tagName === 'VIDEO' || t.tagName === 'SCRIPT')){
-      bar('资源加载失败: ' + (t.src || t.currentSrc || '?'), 'resource');
+      var src = t.src || t.currentSrc || '';
+      // 图片代理的偶发失败不提示（前端有占位图兜底，属于噪音）
+      if (src.indexOf('/api/img') >= 0) return;
+      bar('资源加载失败: ' + src.slice(0, 120), 'resource');
       return;
     }
     bar((ev.message || 'error') + ' @ ' + (ev.filename || '') + ':' + (ev.lineno || 0), 'js');
   }, true);
+
   window.addEventListener('unhandledrejection', function(ev){
     var r = ev.reason;
     bar((r && (r.stack || r.message)) ? String(r.stack || r.message).split('\n')[0] : String(r), 'promise');
   });
+
   window.__flxErr = bar;
 })();
 
