@@ -643,6 +643,70 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
 .pl-ctrl > *{flex:none}
 .pl-ctrl #prog,.pl-ctrl .pl-prog{flex:1 1 auto;min-width:90px}
 .mpv-hint{font-size:12.5px;color:#8a8a8a;letter-spacing:.3px}
+
+/* ===== 播放页精修 ===== */
+/* 顶部标题层级 */
+.pl-top{padding:20px 34px}
+.pl-top #plTitle{font-size:22px;font-weight:600;letter-spacing:.1px;line-height:1.2}
+.pl-top #plSub{font-size:12.5px;color:#9b9b9b;margin-top:5px;letter-spacing:.2px}
+
+/* 控制条：三段式分组 */
+.pl-ctrl{display:flex;align-items:center;gap:16px;height:56px}
+.pl-ctrl .pl-left,.pl-ctrl .pl-right{display:flex;align-items:center;gap:14px;flex:none}
+.pl-ctrl #prog,.pl-ctrl .pl-prog{flex:1 1 auto;min-width:120px;height:3px;
+  background:#3a3a3a;border-radius:0;position:relative;cursor:pointer}
+.pl-ctrl #played,.pl-ctrl .p-played{background:#e50914;border-radius:0}
+.pl-ctrl #knob,.pl-ctrl .knob{width:12px;height:12px;background:#e50914;border-radius:50%;
+  box-shadow:0 0 0 4px rgba(229,9,20,.18);margin-top:-4.5px}
+.pl-ctrl button{width:34px;height:34px;display:grid;place-items:center;border-radius:4px;
+  background:none;border:0;color:#e8e8e8;opacity:.9;transition:opacity .15s, background .15s}
+.pl-ctrl button:hover{opacity:1;background:rgba(255,255,255,.08)}
+.pl-ctrl svg{width:22px;height:22px;stroke-width:1.8}
+.pl-ctrl #plTime,.pl-ctrl .pl-time{font-size:12.5px;color:#a3a3a3;letter-spacing:.3px;
+  font-variant-numeric:tabular-nums;min-width:96px}
+
+/* 右侧栏层级 */
+.pl-side.on{width:308px}
+.pl-side-inner{padding:28px 24px}
+.pl-side h4{font-size:10.5px;letter-spacing:1.6px;color:#7d7d7d;font-weight:600;
+  text-transform:uppercase;margin:28px 0 12px}
+.pl-side h4:first-child{margin-top:0}
+.pl-side .pl-info-title{font-size:16px;font-weight:600;color:#fff;letter-spacing:.1px;line-height:1.35}
+.pl-side .pl-info-meta{font-size:12px;color:#8f8f8f;line-height:2.05;font-weight:400}
+.pl-side .pl-info-meta b{color:#e2e2e2;font-weight:500;float:right}
+.pl-side .pl-eps{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+.pl-side .pl-eps button{height:32px;background:#181818;border:1px solid #232323;
+  border-radius:3px;color:#c7c7c7;font-size:12px;font-weight:500;transition:all .12s}
+.pl-side .pl-eps button:hover{background:#242424;border-color:#333;color:#fff}
+.pl-side .pl-eps button.on{background:#e50914;border-color:#e50914;color:#fff;font-weight:700}
+
+/* 控制条顺序：播放 → 时间 → 进度 → 右侧工具 */
+.pl-ctrl{flex-wrap:nowrap}
+.pl-ctrl #plToggle{order:1}
+.pl-ctrl #plTime{order:2}
+.pl-ctrl #prog{order:3}
+.pl-ctrl #plMute{order:4}
+.pl-ctrl #volS{order:5}
+.pl-ctrl #plPip{order:6}
+.pl-ctrl #plAudio{order:7}
+.pl-ctrl #plSub{order:8}
+.pl-ctrl #plFull{order:9}
+.pl-ctrl #prog{margin:0 6px}
+/* 侧栏排版：标签 + 值，避免粘连 */
+.pl-side .pl-info-meta{font-size:12px;color:#8f8f8f;line-height:2.1}
+.pl-side .pl-info-meta b{display:inline-block;margin-left:8px}
+
+/* 三段式控制条 */
+.pl-ctrl{padding:0 2px}
+.pl-ctrl .pl-row{display:flex;align-items:center;gap:14px;width:100%}
+.pl-ctrl .pl-row #plProg{flex:1 1 auto;min-width:160px;height:3px;background:#3a3a3a;
+  position:relative;cursor:pointer;border-radius:0}
+.pl-ctrl .pl-row #plTime{min-width:88px;font-size:12.5px;color:#a3a3a3;
+  font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.pl-ctrl .pl-row button{width:34px;height:34px;display:grid;place-items:center;
+  background:none;border:0;border-radius:4px;color:#e8e8e8;opacity:.9}
+.pl-ctrl .pl-row button:hover{opacity:1;background:rgba(255,255,255,.08)}
+.pl-ctrl .pl-row svg{width:21px;height:21px}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -1601,6 +1665,16 @@ function bindPlayerUI(){
   const wrap = $('#plWrap');
   const prog = $('#plProg'), played = $('#plPlayed'), buf = $('#plBuf'), knob = $('#plKnob');
   const btn = $('#plToggle'), timeEl = $('#plTime');
+
+  // 控制条重排：进度条插到「时间」右侧，形成 播放·时间·进度·工具 三段式
+  try {
+    const row = document.querySelector('.pl-ctrl .pl-row');
+    const prog = document.getElementById('plProg');
+    if (row && prog && timeEl && prog.parentElement !== row){
+      if (timeEl.nextSibling) row.insertBefore(prog, timeEl.nextSibling);
+      else row.appendChild(prog);
+    }
+  } catch(e){}
   const muteB = $('#plMute'), volS = $('#plVol');
   const ccB = $('#plCC'), ccFile = $('#ccFile');
   const astB = $('#plAudio');
@@ -2744,11 +2818,11 @@ function renderEpisodes(d, url, pwd, title){
   }
   const cur = (typeof d.ep_index === 'number') ? d.ep_index : 0;
   const btns = eps.map(e => {
-    const label = e.ep ? ('第 ' + e.ep + ' 集') : (e.name || '').replace(/\.[a-z0-9]{2,4}$/i, '').slice(0, 12);
+          const label = String(e.i + 1);
     const gb = e.size ? (e.size / 1073741824) : 0;
     const q = gb >= 1 ? (gb.toFixed(1) + 'G') : (e.size ? Math.round(e.size / 1048576) + 'M' : '');
     return `<button class="pe-btn${e.i === cur ? ' on' : ''}" data-ep="${e.i}">`
-         + `${esc(label)}${q ? `<span class="pe-q">${q}</span>` : ''}</button>`;
+         + `${esc(label)}</button>`;
   }).join('');
 
   box.innerHTML = btns;
@@ -3272,8 +3346,23 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
   const gb = d.size ? d.size / 1073741824 : 0;
   const sizeTxt = gb >= 1 ? gb.toFixed(2) + ' GB'
                  : (d.size ? Math.round(d.size / 1048576) + ' MB' : '');
-  $('#plTitle').textContent = d.name || title || '播放';
-  $('#plSub').textContent = (sizeTxt ? sizeTxt + ' · ' : '')
+  // 标题：用片名而不是文件名
+  const _rawTitle = (title || d.name || '播放');
+  const _epName = (d.name || '').replace(/\.[a-z0-9]{2,4}$/i, '');
+  const _cleanTitle = _rawTitle
+    .replace(/全\s*\d+\s*集/g, '')
+    .replace(/内嵌[^\s]*/g, '')
+    .replace(/中英?字幕|官方中字|简繁|双语/g, '')
+    .replace(/\(?(19|20)\d{2}\)?/g, '')
+    .replace(/\.(mkv|mp4|avi|ts|mov)$/i, '')
+    .replace(/\b(2160p|1080p|720p|4K|HDR|DV|BluRay|WEB-?DL|HEVC|H\.?265|H\.?264|x265|x264)\b/gi, '')
+    .replace(/[\[\]（）()]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  $('#plTitle').textContent = _cleanTitle || _rawTitle;
+  $('#plSub').textContent = ((d.ep_index || 0) > -1 && (d.episodes || []).length > 1
+    ? '第 ' + String(Number(d.ep_index || 0) + 1) + ' 集 · ' : '')
+    + (sizeTxt ? sizeTxt + ' · ' : '')
     + '原画直连'
     + (d.reused ? ' · 已缓存' : '');
   plFillInfo(d.name, d.size, [
