@@ -202,6 +202,79 @@ def _find_mpv():
     return None
 
 
+@app.route("/api/mpv/play", methods=["POST", "GET"])
+def api_mpv_play():
+    """用 mpv 播放（网页当遥控器）"""
+    from services import mpvctl as MPV
+    fid = (request.args.get("fid") or "").strip()
+    if not fid:
+        return err("缺少 fid", 400)
+    if not MPV.available():
+        return jsonify({"ok": False, "error": "未找到 mpv", "code": "no_mpv"})
+
+    url, e = PL.direct_url(fid)
+    if not url:
+        return err("文件不可用: %s" % (e or ""), 404)
+
+    title = (request.args.get("title") or "").strip() or "Flixer"
+
+    def _num(k, d=0):
+        try:
+            return int(float(request.args.get(k) or d))
+        except Exception:
+            return d
+
+    x, y = _num("x"), _num("y")
+    w, h = _num("w", 1280), _num("h", 720)
+    if w < 320 or h < 200:
+        w, h, x, y = 1280, 720, 0, 0
+
+    stream = "http://127.0.0.1:7100/api/stream?fid=" + fid
+    try:
+        r = MPV.play(stream, title, x, y, w, h, fid)
+    except Exception as ex:
+        return err("启动 mpv 失败: %s" % ex, 500)
+    return ok({"playing": True, "fid": fid, "title": title,
+               "rect": [x, y, w, h], "reply": r})
+
+
+@app.route("/api/mpv/status")
+def api_mpv_status():
+    from services import mpvctl as MPV
+    return ok(MPV.status())
+
+
+@app.route("/api/mpv/cmd", methods=["POST", "GET"])
+def api_mpv_cmd():
+    """name=pause|toggle_pause|seek|volume|mute  value=..."""
+    from services import mpvctl as MPV
+    name = (request.args.get("name") or "").strip()
+    raw = request.args.get("value")
+    val = None
+    if raw is not None:
+        low = str(raw).lower()
+        if low in ("true", "1"):
+            val = True
+        elif low in ("false", "0"):
+            val = False
+        else:
+            try:
+                val = float(raw)
+            except Exception:
+                val = raw
+    try:
+        r = MPV.cmd(name, val)
+    except Exception as ex:
+        return err("命令失败: %s" % ex, 500)
+    return ok({"cmd": name, "reply": r, "status": MPV.status()})
+
+
+@app.route("/api/mpv/quit", methods=["POST", "GET"])
+def api_mpv_quit():
+    from services import mpvctl as MPV
+    return ok(MPV.quit_player())
+
+
 @app.route("/api/open/mpv", methods=["POST", "GET"])
 def api_open_mpv():
     """
