@@ -53,7 +53,8 @@ def pansou_available(timeout=3):
 
 
 # 只保留夸克和磁力：其他网盘（迅雷/百度/阿里/UC/115…）用户不看
-KEEP_PAN_TYPES = {"quark", "magnet", "ed2k"}
+KEEP_PAN_TYPES = {"quark", "uc", "115", "123", "aliyun", "magnet", "ed2k"}
+# 明确不要：baidu（需客户端）、xunlei（需客户端）
 
 
 def _pansou_once(base, kw, timeout):
@@ -132,7 +133,7 @@ _YEAR_RE = __import__("re").compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
 
 
 _LEAD_TAG = re.compile(r"^\s*(?:[\[【(（][^\]】)）]{0,12}[\]】)）]\s*)+")
-_PUNCT = re.compile(r"[\s\.\-_·:：,，、!！?？'\u2018\u2019\u201c\u201d]")
+_PUNCT = re.compile(r"[「」『』“”‘’《》〈〉\s\.\-_·:：,，、!！?？'\u2018\u2019\u201c\u201d]")
 
 
 def _strip_lead_tag(title):
@@ -514,9 +515,31 @@ def dual_search(query, tmdb_meta, is_tv, max_wait=60, year_hint=None):
 
     # 严格片名：丢掉「祝你生日快乐」这类前缀不同的凑数条目
     if q:
+        _s0, _u0 = list(strong), list(unknown)
         strong = [r for r in strong if _strict_title_ok(r.get("title"), q)]
         unknown = [r for r in unknown if _strict_title_ok(r.get("title"), q)]
         weak = [r for r in weak if _strict_title_ok(r.get("title"), q)]
+
+        # 结果太少时放宽：包含片名或相似度 ≥ 0.62 也收进来
+        if len(strong) + len(unknown) < 3:
+            import difflib as _dl
+
+            def _loose(t):
+                tt = _PUNCT.sub("", _strip_lead_tag(t or "")).lower()
+                qq = _PUNCT.sub("", q).lower()
+                if not tt or not qq:
+                    return False
+                return (qq in tt) or _dl.SequenceMatcher(None, tt, qq).ratio() >= 0.62
+
+            _kept = strong + unknown + weak
+            _extra = []
+            for _r in (_s0 + _u0):
+                if _r in _kept or _r in _extra:
+                    continue
+                if _loose(_r.get("title")):
+                    _extra.append(_r)
+            if _extra:
+                unknown = unknown + _extra
 
     # 年份绑定：片名里写了年份且明显冲突的，直接丢掉（同名片太多）
     if year:
