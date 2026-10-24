@@ -732,11 +732,25 @@ html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:
   background:#3a3a3a;position:relative;cursor:pointer;border-radius:0}
 /* ===== 收尾：任务栏留位 ===== */
 :root{--dock:0px}
-.pl-wrap{inset:0 0 var(--dock) 0}
+.pl-wrap{inset:0;overflow:hidden;overscroll-behavior:none}
 .pl-wrap:fullscreen,.pl-wrap.pseudo-fs,html.fs-on .pl-wrap{inset:0}
 
 /* 电影：没有选集时隐藏标题与区块 */
 .pl-side.no-eps #plEpsHead,.pl-side.no-eps #plEps{display:none}
+/* ===== Dock 安全区（内容在 Dock 上方，但背景仍满屏） ===== */
+.pl-stage{padding-bottom:calc(18px + var(--dock))}
+.pl-body{max-height:calc(100vh - 214px - var(--dock));
+  width:min(100%, calc((100vh - 214px - var(--dock)) * 16 / 9))}
+.pl-ctrl{width:min(100%, calc((100vh - 214px - var(--dock)) * 16 / 9))}
+/* 全屏时 Dock 不再考虑 */
+.pl-wrap:fullscreen .pl-stage,.pl-wrap.pseudo-fs .pl-stage,html.fs-on .pl-stage{padding-bottom:0}
+.pl-wrap:fullscreen .pl-body,.pl-wrap.pseudo-fs .pl-body,html.fs-on .pl-body{max-height:100vh;
+  width:100%}
+
+/* 画面区在舞台里水平居中（flex 容器里用 auto margin 最稳） */
+.pl-stage{align-items:center}
+.pl-body{margin:0 auto;align-self:center}
+.pl-ctrl{margin:0 auto}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
