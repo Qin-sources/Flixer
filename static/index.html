@@ -4694,8 +4694,8 @@ document.addEventListener('keydown', function(e){
   var apply = function(){
     try {
       var sysDock = Math.max(0, Math.round((screen.height || 0) - (screen.availHeight || 0)));
-      // 至少留 56px：即使任务栏是自动隐藏，也不会被它盖住
-      var dock = Math.max(56, sysDock);
+      // 底部浮层（MyDockFinder 的 Dock / Windows 任务栏）高度，留足空间
+      var dock = Math.max(96, sysDock);
       document.documentElement.style.setProperty('--dock', dock + 'px');
     } catch(e){}
   };
