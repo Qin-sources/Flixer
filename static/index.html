@@ -803,6 +803,12 @@ html.fs-on .pl-ctrl{
 /* 原生（铺满）模式：不留 Dock，整屏使用 */
 .pl-wrap:not(.mpv-mode) .pl-stage{padding-bottom:18px !important}
 .pl-wrap:not(.mpv-mode) .pl-body{height:calc(100vh - 200px) !important}
+/* ===== mpv 模式界面 ===== */
+.pl-wrap.mpv-on .pl-body video{visibility:hidden}
+.pl-wrap.mpv-on .pl-body::after{
+  content:"mpv 正在播放";
+  position:absolute;inset:0;display:grid;place-items:center;
+  color:#4a4a4a;font-size:13px;letter-spacing:.5px}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -2969,7 +2975,10 @@ function renderEpisodes(d, url, pwd, title){
     fillMovieInfo(d, title);
     return;
   }
-  if (side) side.classList.remove('no-eps');
+  if (side){
+    side.classList.remove('no-eps');
+    side.classList.add('on');          // 电视剧：自动展开选集
+  }
   const cur = (typeof d.ep_index === 'number') ? d.ep_index : 0;
   const btns = eps.map(e => {
           const label = String(e.i + 1);
@@ -3372,6 +3381,7 @@ async function mpvStart(v, d, title){
   } catch(e){ window._mpvBusy = false; return false; }
 
   MPV.active = true;
+  try { document.getElementById('plWrap').classList.add('mpv-on'); } catch(e){}
   MPV.v = v;
   MPV.fid = d.fid;
   MPV.title = title || '';
@@ -3433,7 +3443,11 @@ async function mpvStop(){
   if (!MPV.active) return;
   try { if (MPV.fullscreen){ MPV.fullscreen = false; await mpvCmd('fullscreen', false); } } catch(e){}
   MPV.active = false;
-  try { document.getElementById('plWrap').classList.remove('mpv-mode'); } catch(e){}
+  try {
+    const w = document.getElementById('plWrap');
+    w.classList.remove('mpv-mode');
+    w.classList.remove('mpv-on');
+  } catch(e){}
   clearInterval(MPV.timer);
   MPV.timer = null;
   try { await fetch('/api/mpv/quit', { method: 'POST' }); } catch(e){}

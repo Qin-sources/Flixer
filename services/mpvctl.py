@@ -319,7 +319,6 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
         _send({"command": ["set_property", "title", title[:60]]}, 1.0)
     # 先用隐藏窗口加载，摆好位再显示，避免看到那一下跳动
     _send({"command": ["set_property", "force-window", True]}, 1.0)
-    _send({"command": ["set_property", "window-minimized", True]}, 0.8)
     _send({"command": ["set_property", "pause", False]}, 1.0)
     r = _send({"command": ["loadfile", url]}, 3.0)
     _fid = fid
@@ -333,7 +332,6 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
 
         def _place():
             _fit_window(x, y, w, h)
-            _send({"command": ["set_property", "window-minimized", False]}, 0.8)
 
         _th.Thread(target=_place, daemon=True).start()
         # 有些片源带假视频轨（防和谐提示画面），自动切到正片轨
@@ -341,7 +339,8 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     except Exception:
         pass
 
-    # 不再等待时长（那会让网页干等 3-6 秒）；交给 status 轮询补齐
+    # 有些文件加载后会停在暂停态，这里再确保一次在播
+    _send({"command": ["set_property", "pause", False]}, 0.8)
     return r
 
 
