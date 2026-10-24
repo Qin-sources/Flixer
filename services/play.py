@@ -560,7 +560,7 @@ def resolve(share_url, passcode="", want_title="", ep=None):
 
     videos = _find_videos(pwd_id, st, items)
     if not videos:
-        return {"ok": False, "error": "这个分享里没有视频文件"}
+        return {"ok": False, "code": "NO_VIDEO", "error": "这个分享里没有视频文件"}
 
     # 多集时排序，供前端选集
     vsorted, episodes = _sort_episodes(videos)

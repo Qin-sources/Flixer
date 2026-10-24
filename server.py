@@ -694,6 +694,22 @@ def api_search():
                         "douban_id": m.get("douban_id") or "",
                     }
                     merged = D.dual_search(q, tm, is_tv, max_wait=6, year_hint=yr)
+                    # 搜不到就换 TMDB 的正式片名 / 原名再试（"一个夜晚和…" vs "…与…"）
+                    try:
+                        if not (merged.get("resources") or merged.get("unknown_resolution")):
+                            _alts = []
+                            for _c in (tm.get("title"), tm.get("original_title")):
+                                _c = (_c or "").strip()
+                                if _c and _c != q and _c not in _alts:
+                                    _alts.append(_c)
+                            for _c in _alts[:2]:
+                                _m2 = D.dual_search(_c, tm, is_tv, max_wait=5, year_hint=yr)
+                                if _m2.get("resources") or _m2.get("unknown_resolution"):
+                                    merged = _m2
+                                    merged["query_used"] = _c
+                                    break
+                    except Exception:
+                        pass
                     out = {
                         "query": q,
                         "tmdb": tm,
