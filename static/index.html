@@ -638,6 +638,11 @@ html.fs-on .pl-body{width:100%;height:100%;max-height:100vh;aspect-ratio:auto}
 .pl-wrap.pseudo-fs .pl-ctrl,
 html.fs-on .pl-ctrl{position:absolute;left:0;right:0;bottom:0;width:auto;height:84px;
   padding:0 28px;background:linear-gradient(transparent,rgba(0,0,0,.9));z-index:9}
+
+/* 控制条内部排布 */
+.pl-ctrl > *{flex:none}
+.pl-ctrl #prog,.pl-ctrl .pl-prog{flex:1 1 auto;min-width:90px}
+.mpv-hint{font-size:12.5px;color:#8a8a8a;letter-spacing:.3px}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -3385,6 +3390,14 @@ if (window._preferWebPlayer !== true){
     // 控制条必须在这里手动绑定，否则按钮、快捷键全部失效
     try { plVeilHide(); } catch(e){}
     try { bindPlayerUI(); } catch(e){}
+    // 画面在 mpv 窗口里，网页这边不要显示缓冲转圈
+    try {
+      const veil = document.getElementById('plVeil');
+      if (veil){
+        veil.innerHTML = '<div class="mpv-hint">画面在 mpv 窗口中播放</div>';
+        veil.classList.add('hide');
+      }
+    } catch(e){}
   }
 }
   // 告诉音轨面板当前文件
