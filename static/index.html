@@ -1313,7 +1313,21 @@ function closeDetail(fromPop){
     _detailFromView = null;
     _detailFromQuery = null;
     _currentMovie = null;
+    window.__restoreDetailScroll = true;
     restoreView(v, q);
+    setTimeout(() => { window.__restoreDetailScroll = false; }, 900);
+    // 回到原来的滚动位置（视图重渲染会重置 scroll，所以多补几次）
+    try {
+      const _y = window.__detailScroll || 0;
+      const _restore = () => {
+        try { window.scrollTo(0, _y); } catch(e){}
+        try { const dw = $('#detailWrap'); if (dw) dw.scrollTop = _y; } catch(e){}
+      };
+      _restore();
+      setTimeout(_restore, 120);
+      setTimeout(_restore, 350);
+      setTimeout(_restore, 700);
+    } catch(e){}
   } else if (fromPop){
     _detailFromView = null;
     _detailFromQuery = null;
@@ -2953,25 +2967,54 @@ async function mpvCmd(name, value){
 function _mpvRect(v){
   // 依次尝试：画面容器 → 视频元素 → 舞台
   // （起播瞬间 video 还没有内在尺寸，高度可能是 0）
-  const pick = [];
-  try { pick.push(document.querySelector('.pl-body')); } catch(e){}
-  if (v) pick.push(v);
-  try { pick.push(document.querySelector('.pl-stage')); } catch(e){}
+  const stage = document.querySelector('.pl-stage') || document.querySelector('.pl-body') || v;
+  if (!stage) return null;
+  let r;
+  try { r = stage.getBoundingClientRect(); } catch(e){ return null; }
+  if (r.width < 240 || r.height < 140) return null;
+
+  // 让出底部控制条（约 96px）和右侧侧栏（打开时 304px）
+  // 用「控制条顶边」来算高度，保证控制条完整露在 mpv 窗口下面
+  let ctrlTop = 0, ctrlH = 0;
+  try {
+    const c = document.getElementById('plCtrl');
+    if (c){
+      const cr = c.getBoundingClientRect();
+      ctrlTop = cr.top;
+      ctrlH = cr.height || 0;
+    }
+  } catch(e){}
+  if (!ctrlH) ctrlH = 96;
+
+  let sideW = 0;
+  try {
+    const side = document.getElementById('plSide');
+    if (side && side.classList.contains('on')){
+      sideW = side.getBoundingClientRect().width || 0;
+    }
+  } catch(e){}
+
+  const dpr = window.devicePixelRatio || 1;
   const chromeH = (window.outerHeight - window.innerHeight) || 0;
-  for (const el of pick){
-    if (!el) continue;
-    let r;
-    try { r = el.getBoundingClientRect(); } catch(e){ continue; }
-    if (r.width < 320 || r.height < 200) continue;
-    // mpv 已关闭 hidpi 缩放（--hidpi-window-scale=no），直接给 CSS 像素即可
-    return {
-      x: Math.round(window.screenX + r.left),
-      y: Math.round(window.screenY + chromeH + r.top),
-      w: Math.round(r.width),
-      h: Math.round(r.height)
-    };
+  const gap = 16;   // 控制条上方留一点空隙
+
+  // 可用高度 = 控制条顶边 - 舞台上边 - 间隙
+  let usableH = r.height;
+  if (ctrlTop > r.top){
+    usableH = ctrlTop - r.top - gap;
+  } else {
+    usableH = r.height - ctrlH - gap;
   }
-  return null;
+  if (usableH < 140) usableH = Math.max(140, r.height - ctrlH - gap);
+
+  const w = Math.max(240, Math.round((r.width - sideW) * dpr));
+  const h = Math.max(140, Math.round(usableH * dpr));
+  return {
+    x: Math.round((window.screenX + r.left) * dpr),
+    y: Math.round((window.screenY + chromeH + r.top) * dpr),
+    w: w,
+    h: h
+  };
 }
 
 function mpvInstallProxy(v){
@@ -4106,7 +4149,12 @@ function goHomeView(){
     renderRows(state.home.rows);
     buildHero(state.hero);
   }
-  scrollTo({top:0, behavior:'smooth'});
+  // 从详情页返回时回到原位置，不要跳回顶部
+  if (window.__restoreDetailScroll && typeof window.__detailScroll === 'number'){
+    scrollTo({top: window.__detailScroll, behavior: 'auto'});
+  } else {
+    scrollTo({top:0, behavior:'smooth'});
+  }
 }
 
 /* ─────────── 夸克账号状态 ─────────── */
@@ -4337,6 +4385,18 @@ document.addEventListener('keydown', function(e){
     try { closeDetail(); } catch(err){}
   }
 });
+
+/* 持续记录滚动位置：从详情返回时用它恢复（否则会跳回顶部） */
+(function(){
+  var record = function(){
+    try {
+      var dw = document.getElementById('detailWrap');
+      if (!dw || !dw.classList.contains('open')) window.__detailScroll = window.scrollY || 0;
+    } catch(e){}
+  };
+  window.addEventListener('scroll', record, { passive: true });
+  try { record(); } catch(e){}
+})();
 </script>
 </body>
 </html>
