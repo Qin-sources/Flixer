@@ -15,6 +15,8 @@ _pipe = None
 _req = {"id": 0}
 _io_lock = threading.RLock()
 _fid = ""
+_last_seen = {"t": 0.0}
+_wd_started = {"v": False}
 _cache = {"duration": 0.0, "volume": 100.0, "mute": False, "pause": False,
           "video_w": 0, "video_h": 0,
           "geometry": "1280x720+0+0", "fullscreen": False}
@@ -263,10 +265,35 @@ def _apply_video_track(tries=12):
     return False
 
 
+
+
+def _touch():
+    _last_seen["t"] = time.time()
+
+
+def _watchdog():
+    """页面长时间没有心跳 → 关掉 mpv（浏览器被关/崩溃时兜底）"""
+    while True:
+        try:
+            time.sleep(5)
+            if not is_running():
+                continue
+            if not _last_seen["t"]:
+                continue
+            if time.time() - _last_seen["t"] > 20:
+                quit_player()
+        except Exception:
+            pass
+
+
 def warm():
     """预热：提前把 mpv 进程和 IPC 通道建好，点播放时只 loadfile"""
     try:
         _ensure()
+        if not _wd_started["v"]:
+            _wd_started["v"] = True
+            import threading as _th
+            _th.Thread(target=_watchdog, daemon=True).start()
         return True
     except Exception:
         return False
@@ -278,6 +305,7 @@ def fit(x, y, w, h):
 
 
 def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
+    _touch()
     global _fid
     _ensure()
     geo = "%dx%d+%d+%d" % (int(w), int(h), int(x), int(y))
@@ -318,6 +346,7 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
 
 
 def cmd(name, value=None):
+    _touch()
     _ensure()
     if name == "pause":
         _cache["pause"] = bool(value)
@@ -354,6 +383,7 @@ _poll_n = {"n": 0}
 
 
 def status():
+    _touch()
     if not is_running():
         return {"running": False}
     _poll_n["n"] += 1

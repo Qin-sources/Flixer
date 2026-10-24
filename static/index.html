@@ -4702,6 +4702,19 @@ document.addEventListener('keydown', function(e){
   apply();
   window.addEventListener('resize', apply);
 })();
+
+/* 关闭页面/浏览器时，让 mpv 一起退出 */
+(function(){
+  var bye = function(){
+    try {
+      if (typeof MPV !== 'undefined' && MPV.active){
+        navigator.sendBeacon('/api/mpv/quit');
+      }
+    } catch(e){}
+  };
+  window.addEventListener('pagehide', bye);
+  window.addEventListener('beforeunload', bye);
+})();
 </script>
 </body>
 </html>
