@@ -3266,8 +3266,16 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
   b.innerHTML = '<video id="plVideo" autoplay playsinline preload="auto"></video>';
   const v = $('#plVideo');
 // B 方案：优先交给 mpv（本地原生解码 + 秒拖），失败再回退网页播放
+  // 能原生就原生：只有音轨播不了 / 有多条视频轨（防和谐假轨）时才交给 mpv
+  {
+    const _ai = d.audio_info || {};
+    const _vi = d.video_info || null;
+    const _tracks = _vi ? (_vi.tracks || 0) : 0;
+    var _needMpv = (_ai.browser_ok === false) || (_tracks > 1);
+  }
+  if (typeof _needMpv === 'undefined') var _needMpv = true;
 if (window._preferWebPlayer !== true){
-  try { _mpvOn = await mpvStart(v, d, title || d.name); } catch(e){ _mpvOn = false; }
+  if (_needMpv){ try { _mpvOn = await mpvStart(v, d, title || d.name); } catch(e){ _mpvOn = false; } }
   if (!alive()) return;
   if (_mpvOn){
     // mpv 模式下 video 没有 src，不会触发 loadeddata，

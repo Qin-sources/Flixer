@@ -290,6 +290,15 @@ def _audio_of(name):
         return {"codec": "", "label": "", "browser_ok": None}
 
 
+
+def _video_of(fid):
+    """探测视频轨数量/编码（多条视频轨=有假轨，浏览器无法切轨）"""
+    try:
+        from . import audio as _AU3
+        return _AU3.probe_video("http://127.0.0.1:7100/api/stream?fid=" + str(fid))
+    except Exception:
+        return None
+
 def _nat_key(name):
     """自然排序键：把文件名里的数字按数值比较（第2集 < 第10集）"""
     import re as _re
@@ -672,6 +681,7 @@ def resolve(share_url, passcode="", want_title="", ep=None):
         "playable": not unsupported,
         "native": True,
         "audio_info": _audio_of(name),
+        "video_info": _video_of(saved_fid),
         "ep_index": ep_index if ep_index is not None else 0,
         "episodes": [
             {"i": e["i"], "ep": e.get("ep"), "name": e["name"], "size": e["size"]}

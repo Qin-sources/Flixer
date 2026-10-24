@@ -214,3 +214,36 @@ def probe_ffmpeg(url, headers=None, timeout=25):
         "browser_ok": (not bad),
         "source": "ffmpeg",
     }
+
+
+def probe_video(url, headers=None, timeout=25):
+    """用 ffmpeg 读文件头，返回视频轨信息：{tracks, codecs, titles}"""
+    exe = _ffmpeg_path()
+    if not exe or not url:
+        return None
+    cmd = [exe, "-hide_banner", "-loglevel", "info"]
+    ua = (headers or {}).get("User-Agent")
+    if ua:
+        cmd += ["-user_agent", ua]
+    cmd += ["-probesize", "3000000", "-analyzeduration", "4000000",
+            "-i", url, "-t", "0", "-f", "null", "-"]
+    try:
+        r = _sp.run(cmd, capture_output=True, timeout=timeout,
+                    creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0))
+    except Exception:
+        return None
+    txt = (r.stderr or b"").decode("utf-8", "replace")
+    tracks = 0
+    codecs = []
+    for line in txt.split("\n"):
+        if "Stream #" not in line or ": Video:" not in line:
+            continue
+        if "wrapped_avframe" in line:
+            continue   # ffmpeg 为 -f null 合成出来的假流，不计入
+        tracks += 1
+        m = _re.search(r"Video: ([a-zA-Z0-9_]+)", line)
+        if m:
+            codecs.append(m.group(1).lower())
+    if tracks == 0:
+        return None
+    return {"tracks": tracks, "codecs": codecs}
