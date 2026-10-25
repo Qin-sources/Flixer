@@ -253,7 +253,8 @@ def _apply_video_track(tries=12):
             if isinstance(tracks, list) and tracks:
                 vids = [t for t in tracks if t.get("type") == "video"]
                 if not vids:
-                    return True          # 纯音频，保持 vid=no
+                    time.sleep(0.25)
+                    continue          # 还没解析出视频轨，继续等（不要放弃）
                 if len(vids) == 1:
                     # 只有一条也要显式打开，否则 --vid=no 会一直黑屏
                     try:
@@ -265,7 +266,14 @@ def _apply_video_track(tries=12):
                 cur = _get("vid", 0.6)
                 if want is not None and str(want) != str(cur):
                     _send({"command": ["set_property", "vid", want]}, 0.8)
-                return True
+                # 校验：vid 必须真的打开（False 表示没开）
+                got = _get("vid", 0.6)
+                if got is False or got is None:
+                    _send({"command": ["set_property", "vid", want if want is not None else 1]}, 0.8)
+                    time.sleep(0.2)
+                    got = _get("vid", 0.6)
+                if got not in (False, None):
+                    return True
         except Exception:
             pass
         time.sleep(0.25)
