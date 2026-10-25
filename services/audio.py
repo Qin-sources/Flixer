@@ -202,6 +202,9 @@ def probe_ffmpeg(url, headers=None, timeout=25):
     except Exception:
         return None
     txt = (r.stderr or b"").decode("utf-8", "replace")
+    dm = _re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", txt)
+    if dm:
+        duration = int(dm.group(1)) * 3600 + int(dm.group(2)) * 60 + float(dm.group(3))
     m = _re.search(r"Stream #\d+:\d+.*?: Audio: ([a-zA-Z0-9_]+)", txt)
     if not m:
         return None
@@ -237,6 +240,7 @@ def probe_video(url, headers=None, timeout=25):
     codecs = []
     titles = []
     sizes = []
+    duration = 0.0
     for line in txt.split("\n"):
         if "Stream #" not in line or ": Video:" not in line:
             continue
@@ -252,4 +256,5 @@ def probe_video(url, headers=None, timeout=25):
         sizes.append((int(sm.group(1)), int(sm.group(2))) if sm else (0, 0))
     if tracks == 0:
         return None
-    return {"tracks": tracks, "codecs": codecs, "titles": titles, "sizes": sizes}
+    return {"tracks": tracks, "codecs": codecs, "titles": titles,
+            "sizes": sizes, "duration": duration}
