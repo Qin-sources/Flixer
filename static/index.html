@@ -3729,14 +3729,21 @@ if (window._preferWebPlayer !== true){
 if (!_mpvOn){
   if (_remux){
     // 选真正的正片轨：标题含 notice/提示 的跳过，否则取第 2 条
-    // 挑正片轨：分辨率最大的那条（假轨通常是小画面提示）
+    // 挑正片轨：只在真视频编码里挑（排除 mjpeg 封面图轨），取分辨率最大的
     const _sizes = (_vi && _vi.sizes) ? _vi.sizes : [];
-    let _idx = 1;
-    if (_sizes.length > 1){
+    const _codecsAll = (_vi && _vi.codecs) ? _vi.codecs : [];
+    const _realCodec = (c) => /^(hevc|h264|avc1|av1|vp8|vp9|mpeg4)$/i.test(String(c || ''));
+    let _idx = 0;
+    {
       let _best = -1;
       for (let i = 0; i < _sizes.length; i++){
+        if (!_realCodec(_codecsAll[i])) continue;
         const a = (_sizes[i][0] || 0) * (_sizes[i][1] || 0);
         if (a > _best){ _best = a; _idx = i; }
+      }
+      if (_best < 0){
+        const j = _codecsAll.findIndex(_realCodec);
+        _idx = j >= 0 ? j : 0;
       }
     }
     const _vc = ((_vi && _vi.codecs && _vi.codecs[_idx]) || '').toLowerCase();
