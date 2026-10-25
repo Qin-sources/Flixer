@@ -80,6 +80,9 @@ def index():
         resp = send_from_directory(os.path.join(ROOT, "static"), "index.html")
     # 首页永不缓存：否则改了代码看到的还是旧页面（今天踩过好几次）
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    # 强制浏览器丢掉旧缓存（改代码后立刻生效，不再出现"改了但页面是旧的"）
+    resp.headers["Clear-Site-Data"] = '"cache"'
+    resp.headers["X-Flixer-Build"] = time.strftime("%Y%m%d-%H%M%S")
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
