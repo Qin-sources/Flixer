@@ -370,12 +370,10 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=
         pass
 
     # 有些文件加载后会停在暂停态，这里再确保一次在播
-    # 有 hint 时 mpv 已经按正确轨加载，只做一次轻量校验，不再长时间等待
+    # 不做阻塞等待：音频可以先播，视频轨由后台线程补开
     try:
         if vid_hint:
-            _apply_video_track(tries=4)
-        else:
-            _apply_video_track(tries=25)
+            _apply_video_track(tries=2)
     except Exception:
         pass
     _send({"command": ["set_property", "force-window", True]}, 1.0)
@@ -383,12 +381,44 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=
     # 起播后盯 6 秒：解码器没出帧就自动改软解（解决部分显卡 HEVC 黑屏）
     try:
         import threading as _th2
-        _th2.Thread(target=_hw_watchdog, args=(6.0,), daemon=True).start()
+        _th2.Thread(target=_ensure_video, args=(vid_hint,), daemon=True).start()
+        _th2.Thread(target=_hw_watchdog, args=(9.0,), daemon=True).start()
     except Exception:
         pass
     return r
 
 
+
+
+
+
+def _ensure_video(vid_hint=None, tries=60):
+    """后台确保视频轨被打开（不阻塞音频播放）"""
+    try:
+        for _ in range(tries):
+            time.sleep(0.5)
+            if not is_running():
+                return
+            try:
+                w = _get("width", 0.5)
+            except Exception:
+                w = None
+            if w:
+                return                     # 已经有画面了
+            try:
+                if _apply_video_track(tries=2):
+                    cur = _get("vid", 0.5)
+                    if cur not in (False, None):
+                        # 有轨道了，打开输出
+                        try:
+                            _send({"command": ["set_property", "force-window", True]}, 0.6)
+                        except Exception:
+                            pass
+                        return
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def _hw_watchdog(wait=6.0):
