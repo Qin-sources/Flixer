@@ -4474,8 +4474,15 @@ async function runFilter(reset){
       }
     }
   } catch(e){
-    if (cnt) cnt.textContent = '';
-    g.innerHTML = '<div class="fv-empty" style="grid-column:1/-1">' + esc(e.message) + '</div>';
+    // 加载下一页失败时不要清空已渲染的卡片（否则整页变空白）
+    if (reset){
+      if (cnt) cnt.textContent = '';
+      g.innerHTML = '<div class="fv-empty" style="grid-column:1/-1">' + esc(e.message) + '</div>';
+    } else {
+      const m2 = document.getElementById('fvMore');
+      if (m2) m2.innerHTML = '<div style="color:#8a8a8a;font-size:12.5px;padding:10px">下一页加载失败，滚动可重试</div>';
+      FSTATE.page = Math.max(0, FSTATE.page - 1);
+    }
   }
 }
 
