@@ -809,6 +809,14 @@ html.fs-on .pl-ctrl{
   content:"mpv 正在播放";
   position:absolute;inset:0;display:grid;place-items:center;
   color:#4a4a4a;font-size:13px;letter-spacing:.5px}
+/* ===== 布局稳定：起播前后尺寸不变，控制条永远在视口内 ===== */
+.pl-wrap{display:flex;flex-direction:column;overflow:hidden}
+.pl-stage{flex:1 1 auto;min-height:0;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:center}
+.pl-body{flex:0 0 auto;height:calc(100vh - 200px - var(--dock)) !important;
+  max-height:calc(100vh - 200px - var(--dock)) !important;width:100% !important}
+.pl-wrap.mpv-mode .pl-body{height:auto !important}
+.pl-ctrl{flex:0 0 auto;margin-top:12px}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
@@ -3485,6 +3493,11 @@ function _canPlayVideo(codec){
 }
 
 async function playQuark(url, pwd, title, ep){
+  // 切片前清掉上一部片的所有延迟任务，避免它继续改界面（片名/时长乱跳）
+  try {
+    (window.__plTimers || []).forEach(function(t){ clearTimeout(t); });
+    window.__plTimers = [];
+  } catch(e){}
   const myToken = ++_plToken;
   const w = $('#plWrap');
   const b = $('#plBody');
@@ -3605,7 +3618,7 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
   // 文件名没写音频编码的 MKV：后台读文件头确认（不影响起播）
   if ((!d.audio_info || d.audio_info.browser_ok === null || d.audio_info.browser_ok === undefined)
       && /\.mkv$/i.test(d.name || '') && d.fid){
-    setTimeout(() => {
+    window.__plTimers.push(setTimeout(() => {
       fetch('/api/audio?fid=' + encodeURIComponent(d.fid))
         .then(r => r.json())
         .then(j => {
@@ -3618,7 +3631,7 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
             }
           } catch(e){}
         }).catch(()=>{});
-    }, 2500);
+    }, 2500));
   }
 
   // 杜比音轨：自动启用 AAC 流（不换片源，视频静音、声音走转码流）
@@ -3777,11 +3790,11 @@ if (!_mpvOn){
     v.addEventListener('error', () => _fallback('浏览器解码失败'), { once: true });
     // 兜底判定要保守：大文件（4K/HEVC）首帧可能要十几秒，
     // 只有在「完全没有任何视频信息」时才认为原生失败，避免误起 mpv
-    setTimeout(() => {
+    window.__plTimers.push(setTimeout(() => {
       if (!alive() || MPV.active || _fellBack) return;
       if (v.videoWidth || v.duration > 0 || v.currentTime > 0) return;
       _fallback('画面一直没有出来');
-    }, 25000);
+    }, 25000));
   }
 
   // remux 流不支持 Range：拖动后从目标时间点重启
