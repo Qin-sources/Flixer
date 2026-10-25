@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>Quark 解码能力探测</title>
+<style>body{background:#111;color:#eee;font:15px/1.8 system-ui,"Microsoft YaHei";padding:30px}
+h1{font-size:20px;margin-bottom:14px}table{border-collapse:collapse;margin-top:10px}
+td{padding:6px 16px;border-bottom:1px solid #262626}td:first-child{color:#9a9a9a}
+.ok{color:#62d26f;font-weight:700}.no{color:#e05656;font-weight:700}#st{margin-top:16px;color:#888}</style>
+</head>
+<body>
+<h1>Flixer · 浏览器解码能力探测</h1>
+<div id="ua" style="color:#8a8a8a;font-size:12.5px"></div>
+<table id="tb"></table>
+<div id="st">正在上报…</div>
+<script>
+(function(){
+  var v = document.createElement('video');
+  var audio = document.createElement('audio');
+  var cases = [
+    ['HEVC hvc1', 'video/mp4; codecs="hvc1.1.6.L120.90"'],
+    ['HEVC hev1', 'video/mp4; codecs="hev1.1.6.L120.90"'],
+    ['H.264',     'video/mp4; codecs="avc1.640028"'],
+    ['AV1',       'video/mp4; codecs="av01.0.08M.08"'],
+    ['Dolby Digital Plus (E-AC3)', 'audio/mp4; codecs="ec-3"'],
+    ['Dolby Digital (AC3)',        'audio/mp4; codecs="ac-3"'],
+    ['DTS',       'audio/mp4; codecs="dtsc"'],
+    ['TrueHD',    'audio/mp4; codecs="mlpa"'],
+    ['AAC',       'audio/mp4; codecs="mp4a.40.2"'],
+    ['MKV 容器',  'video/x-matroska']
+  ];
+  var rows = [], out = {};
+  cases.forEach(function(c){
+    var r = v.canPlayType(c[1]) || '(空)';
+    var m = (c[1].indexOf('audio/') === 0) ? (audio.canPlayType(c[1]) || '(空)') : null;
+    out[c[0]] = r;
+    var good = (r === 'probably' || r === 'maybe');
+    rows.push('<tr><td>' + c[0] + '</td><td class="' + (good?'ok':'no') + '">' +
+      (r === '' ? '不支持' : r) + '</td></tr>');
+  });
+  document.getElementById('tb').innerHTML = rows.join('');
+  document.getElementById('ua').textContent = 'UA: ' + navigator.userAgent;
+  out._ua = navigator.userAgent;
+  out._mse_hevc = (window.MediaSource && MediaSource.isTypeSupported) ? MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L120.90"') : null;
+  out._mse_ec3 = (window.MediaSource && MediaSource.isTypeSupported) ? MediaSource.isTypeSupported('audio/mp4; codecs="ec-3"') : null;
+
+  fetch('/api/_probe_report', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(out)})
+   .then(function(r){ return r.json(); })
+   .then(function(){ document.getElementById('st').textContent = '已上报，可以关闭这个标签页了'; })
+   .catch(function(e){ document.getElementById('st').textContent = '上报失败: ' + e.message; });
+})();
+</script>
+</body>
+</html>

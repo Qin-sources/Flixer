@@ -217,6 +217,26 @@ def api_mpv_fit():
     return ok({"fitted": bool(fitted), "rect": [x, y, w, h]})
 
 
+@app.route("/_quarktest")
+def _quarktest():
+    from flask import send_from_directory
+    return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"),
+                               "_quarktest.html")
+
+
+@app.route("/api/_probe_report", methods=["POST"])
+def _probe_report():
+    import json as _j
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "probe_report.json")
+        with open(p, "w", encoding="utf-8") as f:
+            _j.dump(data, f, ensure_ascii=False, indent=2)
+        return ok({"saved": True})
+    except Exception as e:
+        return err("保存失败: %s" % e, 500)
+
+
 @app.route("/api/mpv/play", methods=["POST", "GET"])
 def api_mpv_play():
     """用 mpv 播放（网页当遥控器）"""

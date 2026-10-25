@@ -3454,6 +3454,36 @@ async function mpvStop(){
   MPV.v = null;
 }
 
+/* 把片源编码翻译成 MIME，问当前浏览器能不能解 */
+function _codecMime(name){
+  var n = String(name || '').toLowerCase();
+  if (/^(eac3|e-ac3|ddp|dd\+|dolby)/.test(n)) return 'audio/mp4; codecs="ec-3"';
+  if (/^ac3/.test(n)) return 'audio/mp4; codecs="ac-3"';
+  if (/^(dts|dca)/.test(n)) return 'audio/mp4; codecs="dtsc"';
+  if (/^(truehd|mlp)/.test(n)) return 'audio/mp4; codecs="mlpa"';
+  if (/^aac/.test(n)) return 'audio/mp4; codecs="mp4a.40.2"';
+  if (/^opus/.test(n)) return 'audio/mp4; codecs="opus"';
+  if (/^flac/.test(n)) return 'audio/mp4; codecs="flac"';
+  return null;
+}
+function _videoMime(codec){
+  var c = String(codec || '').toLowerCase();
+  if (c === 'hevc') return 'video/mp4; codecs="hvc1.1.6.L120.90"';
+  if (c === 'h264') return 'video/mp4; codecs="avc1.640028"';
+  if (c === 'av1')  return 'video/mp4; codecs="av01.0.08M.08"';
+  return null;
+}
+function _canPlayAudio(codec){
+  var m = _codecMime(codec);
+  if (!m) return true;                     // 未知编码不拦，交给播放时兜底
+  try { return document.createElement('audio').canPlayType(m) !== ''; } catch(e){ return true; }
+}
+function _canPlayVideo(codec){
+  var m = _videoMime(codec);
+  if (!m) return true;
+  try { return document.createElement('video').canPlayType(m) !== ''; } catch(e){ return true; }
+}
+
 async function playQuark(url, pwd, title, ep){
   const myToken = ++_plToken;
   const w = $('#plWrap');
@@ -3592,7 +3622,7 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
   }
 
   // 杜比音轨：自动启用 AAC 流（不换片源，视频静音、声音走转码流）
-  if (!_mpvOn && !window._mpvBusy && !(typeof MPV !== 'undefined' && MPV.active) && d.audio_info && d.audio_info.browser_ok === false && d.fid){
+  if (false){   // 旧的「杜比自动起外部播放器」分支：已由统一判定取代，禁用
     setTimeout(async () => {
       if (!alive()) return;
       if (window._preferWeb !== true){
@@ -3657,15 +3687,15 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
     const _vi = d.video_info || null;
     const _tracks = _vi ? (_vi.tracks || 0) : 0;
     var _codecs = (_vi && _vi.codecs) ? _vi.codecs : [];
-    var _isHevc = _codecs.some(function(c){ return /^(hevc|h265|hev1|hvc1)$/i.test(String(c || '')); });
-    var _canHevc = false;
+    // 问浏览器：这条音轨、这个视频编码，能不能原生解
+    var _audioOk = _canPlayAudio(_ai.codec || _ai.raw_codec || '');
+    var _videoOk = _codecs.length ? _canPlayVideo(_codecs[0]) : true;
+    // 多视频轨（防和谐假轨）浏览器无法切轨 → 只能 mpv
+    var _needMpv = (!_audioOk) || (!_videoOk) || (_tracks > 1);
     try {
-      var _probeV = document.createElement('video');
-      _canHevc = (_probeV.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"') !== '')
-              || (_probeV.canPlayType('video/mp4; codecs="hev1.1.6.L120.90"') !== '');
+      if (window.__flxDiag) console.log('[flx] audio=' + (_ai.codec||'') + ' ok=' + _audioOk +
+        ' video=' + (_codecs[0]||'') + ' ok=' + _videoOk + ' tracks=' + _tracks + ' mpv=' + _needMpv);
     } catch(e){}
-    // 音轨放不了 / 多视频轨（假轨）/ HEVC 且浏览器不支持 → 交给 mpv
-    var _needMpv = (_ai.browser_ok === false) || (_tracks > 1) || (_isHevc && !_canHevc);
   }
   if (typeof _needMpv === 'undefined') var _needMpv = true;
 if (window._preferWebPlayer !== true){
