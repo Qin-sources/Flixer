@@ -208,75 +208,7 @@ curl -s "http://127.0.0.1:7100/api/search?q=兰香如故"
 
 ---
 
-## 四、开发历程（踩坑实录）
-
-这个项目不是一次写成的。下面是关键节点，数字都是当时实测的。
-
-**1. 播放卡顿（已修）**
-最初 `/api/stream` 按 8MB 有界段串行拉流，每段都要重连夸克，接缝停 0.4~0.6 秒 → 「开头流畅、几秒后一卡一卡」。
-改成生产者线程预取 + 约 6MB 队列后：吞吐 4.44 → 6.16 MB/s，100MB 连读中 >350ms 卡顿 4 次 → 0 次。
-
-**2. 元数据太慢（已修）**
-首页冷启动 35.58s → 1.17s，榜单 4.64s → 0.05s。
-手段：旧缓存过期先返回（stale-while-revalidate）+ 冷启动只返回榜单本体 + 启动预热。
-
-**3. 播放判定（推翻重做）**
-一开始按片源音轨硬判「要不要 mpv」，结果同一部片在 Chrome 和夸克里行为不一致。
-后来实测三家浏览器：
-
-```
-360安全16.1 / Edge155 / 夸克7.4   都能解 HEVC + Dolby E-AC3 + AC3
-Chrome                            解不了 ec-3 / ac-3
-DTS / TrueHD                      四家全不支持 → 只能 mpv
-```
-
-于是改成「问浏览器能不能解」，播放路径由运行时能力决定。
-
-**4. 从网页播放改成全 mpv**
-网页播放器要处理遮罩、进度条、全屏、mpv 窗口对位……每一块都能出 bug（进度条闪、控制条跑出屏幕、窗口叠在一起）。
-最后直接删掉播放页：点播放 → mpv 起播 + 一个轻提示。**问题从根源消失**。
-
-**5. mpv 的一串坑（都已修）**
-
-```
-两个 mpv 窗口         → 加 _io_lock + 单实例守卫 _kill_strays()
-窗口位置偏右下          → SetWindowPos 用逻辑像素，不要再乘 devicePixelRatio
-窗口闪                → 摆位容差 10px，贴合即停
-播一会自动退出         → 网页心跳（5 秒一次）喂看门狗
-先闪假轨再出正片       → 起播 --vid=no，选好正片轨再开画面
-黑屏有声              → 硬解不兼容，6 秒无帧自动切软解并记住
-```
-
-**6. 搜索源（绕了一大圈）**
-本地 PanSou 的插件是**异步**的：接口 3~4 秒就返回（此时 total=0），插件跑完才写缓存。
-所以之前「搜索很慢/没结果」其实是**只查了一次**。改成两段式：先查一次，结果少于 3 条时等 4 秒再查一次合并。
-
-后来接 `pansou.top`：抓包发现它是 **SSE 流式推送**，每条结果还带一个加密串，要再 POST `/api/other/save_url` 才拿到真实夸克链接。
-接上之后《兰香如故》从 2 条变成 25 条（验活后剩 7 条真正可用的 4K 源）。
-
-**7. 死链误判**
-一条分享被标成「需要提取码」，点进去却是无效的。直接问夸克：
-
-```
-41011 分享地址已失效
-41012 好友已取消了分享
-```
-
-而库里存的是更早的 `NEED_PASSCODE`。于是加了 `share_state()` 现场复查，死链不再骗人输密码。
-
-**8. 筛选重做**
-原来走豆瓣 tag，做不出「美国 + 喜剧」这种组合——要么混进国产片，要么筛空。
-改成 TMDB `/discover`：地区、类型、门类都在服务端组合过滤。实测：
-
-```
-美国 + 喜剧    20001 部
-韩国 + 悬疑剧   422 部
-动漫 + 日本    5551 部
-```
-
----
-
-## 五、已知限制
+## 四、已知限制
 
 - **只支持夸克播放**。其他网盘能搜到，但播放链路只接了夸克。
 - **DTS / TrueHD 必须走 mpv**，浏览器内核都不支持。
@@ -287,7 +219,7 @@ DTS / TrueHD                      四家全不支持 → 只能 mpv
 
 ---
 
-## 六、支持作者
+## 五、支持作者
 
 这个项目花了很久。如果它帮到了你，**欢迎投喂作者**——完全自愿，不影响任何功能，
 也不构成任何商业授权。
@@ -309,7 +241,7 @@ DTS / TrueHD                      四家全不支持 → 只能 mpv
 
 ---
 
-## 七、免责声明
+## 六、免责声明
 
 本项目仅用于**个人学习与技术研究**，**绝不商用、绝不盈利**，不存储任何影视资源，
 所有内容均来自第三方公开分享链接。请勿将本项目用于任何商业或盈利目的。
@@ -319,7 +251,7 @@ DTS / TrueHD                      四家全不支持 → 只能 mpv
 
 ---
 
-## 八、致谢
+## 七、致谢
 
 - [PanSou](https://github.com/fish2018/pansou) —— 网盘搜索内核
 - [mpv](https://mpv.io/) —— 播放器
@@ -327,104 +259,3 @@ DTS / TrueHD                      四家全不支持 → 只能 mpv
 - 豆瓣 —— 榜单与中文资料
 - [Scrapling](https://github.com/D4Vinci/Scrapling) —— 反爬抓取兜底
 
----
-
-# Flixer — English
-
-**One click from “I want to watch this in 4K” to actually watching it.**
-
-A self-hosted movie & series hub: browse with Douban / TMDB, find sources across netdisk search
-engines, and play through **mpv via a direct link**. Real 4K, real Dolby, instant seeking.
-
-> Personal study and research only. **Not sold, no ads, no paid tier.**
-> A voluntary tip jar sits at the bottom of this page; it changes nothing about the software.
-
-
-## Screenshots
-
-| Home | Discover |
-|---|---|
-| ![Home](docs/shot-home.png) | ![Discover](docs/shot-filter.png) |
-
-| Detail | Sources (auto-verified) |
-|---|---|
-| ![Detail](docs/shot-detail.png) | ![Sources](docs/shot-search.png) |
-
-## 0. Three things you must have
-
-| Dependency | Purpose | How to get it |
-|---|---|---|
-| **TMDB API Key** | Titles, posters, overviews, discover filters | Register at <https://www.themoviedb.org> → Settings → API → free v3 key → `data/tmdb_key.txt` |
-| **mpv** | The actual player (web UI is only a remote) | Windows build from <https://mpv.io/installation/> → `bin/mpv/mpv.exe` |
-| **Quark cookie** | Resolving netdisk direct links | Log in at <https://pan.quark.cn> → F12 → Network → copy `Cookie` → `data/quark_cookie.json` |
-
-## 1. What problem it solves
-
-- **Aggregator sites** hand you transcoded 1080p — bitrate squeezed, audio dropped, "4K" is a label
-- **Netdisk players** want you to save the file first, then throttle you anyway
-- **Browser players** cannot decode Dolby, cannot switch tracks, and their progress bar flickers
-
-Flixer's answer: **let the professional player do the professional job.**
-Quark direct link → mpv hardware decoding → instant seek. The web UI only does what it is good at:
-finding, filtering, picking episodes, passing parameters.
-
-## 2. Netflix-grade ritual
-
-A deliberately restrained, Netflix-flavoured interface: an opening brand animation
-(logo fade-in → light bloom → hero rise) before the home page, a dark canvas with a single red accent,
-slow hover states, and **zero** promo popups. When you press play, the page steps aside — the picture
-belongs to mpv, not to a fake in-page player.
-
-> Principle: **less is premium.** Every animation must make the content stand out, or it gets deleted.
-
-## 3. Dirty problems already solved
-
-| Problem | Fix |
-|---|---|
-| Dead share links | Ask Quark per link (`41011` expired / `41012` revoked) instead of letting you click into nothing |
-| Decoy video track | Detect the fake "notice" track and pick the real one before playback starts |
-| Access codes | Parsed automatically from URL params and share titles |
-| Black screen with audio | GPU HEVC incompatibility → auto software decode, remembered per machine |
-| Filters | TMDB discover: "US + Comedy" no longer returns Chinese films |
-| Slow search | PanSou plugins are async → two-phase query (partial results first, refill after 4s) |
-| Scroll flicker | Fade-in only on first render, not on every page append |
-
-## 4. Stack & credits
-
-Python (Flask + waitress) · single-file frontend · mpv IPC · SQLite cache
-
-Built with [PanSou](https://github.com/fish2018/pansou), [mpv](https://mpv.io/),
-[FFmpeg](https://ffmpeg.org/), [TMDB](https://www.themoviedb.org/), Douban,
-[Scrapling](https://github.com/D4Vinci/Scrapling), [pansou.top](https://pansou.top/),
-[Motion One](https://motion.dev/).
-
-**Developed with [DSH (DeepSeek Harness)](https://github.com/deepseek-ai)** — requirement breakdown,
-implementation, packet-level debugging and acceptance testing all happened inside DSH sessions,
-backed by measured numbers.
-
-## 5. Known limitations
-
-- Quark only for playback
-- **DTS / TrueHD must go through mpv**
-- Multi-video-track files need mpv to choose the real track
-- pansou.top is third-party and may change or disappear
-- 4K HEVC may show a few seconds of black on unsupported GPUs
-- Episode playlist is appended in the background (40 episodes ≈ 15–30s)
-
-## 6. Support the author
-
-If this project helped you, **you are welcome to buy the author a coffee**. Completely voluntary —
-it unlocks nothing and is not a commercial license.
-
-| WeChat Pay | Alipay |
-|---|---|
-| <img src="docs/reward-wechat.jpg" width="220"> | <img src="docs/reward-alipay.jpg" width="220"> |
-
-A **Star**, an **Issue**, or honest feedback helps just as much.
-
-## 7. Disclaimer
-
-Personal study and research only. Not sold, no ads, no paid edition. No media is stored or hosted;
-everything comes from third-party public share links. You are responsible for complying with
-applicable laws and provider terms. If a rights holder believes content infringes,
-**contact the author and it will be removed immediately**.
