@@ -176,6 +176,46 @@ def parse_episode_meta(name: str):
     return season, ep, q
 
 
+
+
+# 夸克分享状态码 → ok / pwd / dead
+_DEAD_CODES = {41011, 41012, 41013, 41014, 41015}
+_PWD_CODES = {41004, 41006, 41008, 41009}
+
+
+def share_state(url_or_id: str) -> dict:
+    """查一分享的真实状态（不需要登录）。返回 {state, code, message}"""
+    try:
+        pwd_id = url_or_id
+        if "http" in url_or_id:
+            pwd_id, _ = parse_share(url_or_id)
+        if not pwd_id:
+            return {"state": "unknown", "code": 0, "message": "无法解析分享号"}
+        import requests as _rq
+        r = _rq.post(
+            "https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token",
+            headers={"User-Agent": UA, "Referer": "https://pan.quark.cn/",
+                     "Content-Type": "application/json"},
+            params={"pr": "ucpro", "fr": "pc"},
+            json={"pwd_id": pwd_id, "passcode": ""},
+            timeout=12,
+        )
+        try:
+            j = r.json()
+        except Exception:
+            return {"state": "unknown", "code": r.status_code, "message": r.text[:60]}
+        code = int(j.get("code") or 0)
+        msg = j.get("message") or ""
+        if code == 0:
+            return {"state": "ok", "code": 0, "message": msg}
+        if code in _DEAD_CODES or "取消" in msg or "失效" in msg or "不存在" in msg:
+            return {"state": "dead", "code": code, "message": msg}
+        if code in _PWD_CODES or "密码" in msg or "提取码" in msg:
+            return {"state": "pwd", "code": code, "message": msg}
+        return {"state": "unknown", "code": code, "message": msg}
+    except Exception as e:
+        return {"state": "unknown", "code": 0, "message": str(e)[:60]}
+
 def walk(pwd_id: str, stoken: str, max_depth: int = 3,
          max_items: int = 400) -> dict:
     """

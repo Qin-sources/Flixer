@@ -422,7 +422,23 @@ def _annotate_live(payload):
                 if not st:
                     continue
                 if st["alive"]:
-                    r["live_state"] = "pwd" if st.get("code") == "NEED_PASSCODE" else "ok"
+                    if st.get("code") == "NEED_PASSCODE":
+                        # 历史记录说"要密码"不一定可信（分享可能已被取消）→ 现场核一次
+                        try:
+                            from . import quark as _QK
+                            sx = _QK.share_state(r.get("pan_url") or "")
+                            if sx.get("state") == "dead":
+                                r["live_state"] = "dead"
+                                r["dead_reason"] = sx.get("message") or "分享已失效"
+                                continue
+                            if sx.get("state") == "ok":
+                                r["live_state"] = "ok"
+                                continue
+                        except Exception:
+                            pass
+                        r["live_state"] = "pwd"
+                    else:
+                        r["live_state"] = "ok"
                 else:
                     r["live_state"] = "dead"
                     r["dead_reason"] = st.get("error") or "分享已失效"
