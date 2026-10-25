@@ -389,7 +389,26 @@ def api_open_mpv():
     except Exception as ex:
         return err("文件不可用: %s" % ex, 404)
 
-    url = "http://127.0.0.1:7100/api/stream?fid=" + fid
+    # direct=1 时让 mpv 直连夸克，不再经过本机转发（少一跳、更快）
+    use_direct = (request.args.get("direct") or "1") not in ("0", "false", "")
+    headers = None
+    if use_direct:
+        try:
+            du, de = PL.direct_url(fid)
+            if du:
+                headers = PL.stream_headers() if hasattr(PL, "stream_headers") else None
+                if headers is None:
+                    from services import quark_auth as QA
+                    headers = {
+                        "User-Agent": getattr(PL, "CLIENT_UA", "Mozilla/5.0"),
+                        "Referer": getattr(PL, "REFERER", "https://pan.quark.cn"),
+                        "Cookie": QA.load_cookie() or "",
+                    }
+                url = du
+        except Exception:
+            url = None
+    if not use_direct or not url:
+        url = "http://127.0.0.1:7100/api/stream?fid=" + fid
     title = (request.args.get("title") or "").strip() or "Flixer"
 
     def _num(k, d=0):
@@ -407,7 +426,7 @@ def api_open_mpv():
     # 复用带 IPC 的实例，避免出现两个窗口
     from services import mpvctl as MPV
     try:
-        MPV.play(url, title, max(0, x), max(0, y), w, h, fid)
+        MPV.play(url, title, max(0, x), max(0, y), w, h, fid, headers=headers)
     except Exception as ex:
         return err("启动 mpv 失败: %s" % ex, 500)
     return ok({"opened": True, "player": exe, "url": url,

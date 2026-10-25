@@ -304,7 +304,7 @@ def fit(x, y, w, h):
     return _fit_window(int(x), int(y), int(w), int(h))
 
 
-def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
+def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None):
     _touch()
     global _fid
     _ensure()
@@ -318,6 +318,21 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid=""):
     if title:
         _send({"command": ["set_property", "title", title[:60]]}, 1.0)
     # 先用隐藏窗口加载，摆好位再显示，避免看到那一下跳动
+    # 直连时把 UA/Referer/Cookie 交给 mpv（缺 cookie 会 412）
+    try:
+        if headers:
+            ua = headers.get("User-Agent") or headers.get("user-agent")
+            if ua:
+                _send({"command": ["set_property", "user-agent", ua]}, 0.8)
+            hdr = []
+            for k in ("Referer", "Cookie", "Origin"):
+                v = headers.get(k)
+                if v:
+                    hdr.append("%s: %s" % (k, v))
+            if hdr:
+                _send({"command": ["set_property", "http-header-fields", ",".join(hdr)]}, 0.8)
+    except Exception:
+        pass
     _send({"command": ["set_property", "force-window", True]}, 1.0)
     _send({"command": ["set_property", "pause", False]}, 1.0)
     r = _send({"command": ["loadfile", url]}, 3.0)
