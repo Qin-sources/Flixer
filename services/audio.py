@@ -235,6 +235,8 @@ def probe_video(url, headers=None, timeout=25):
     txt = (r.stderr or b"").decode("utf-8", "replace")
     tracks = 0
     codecs = []
+    titles = []
+    sizes = []
     for line in txt.split("\n"):
         if "Stream #" not in line or ": Video:" not in line:
             continue
@@ -244,6 +246,10 @@ def probe_video(url, headers=None, timeout=25):
         m = _re.search(r"Video: ([a-zA-Z0-9_]+)", line)
         if m:
             codecs.append(m.group(1).lower())
+        tm = _re.search(r"\(([^)]{1,40})\)", line)
+        titles.append((tm.group(1).strip() if tm else ""))
+        sm = _re.search(r"(\d{2,5})x(\d{2,5})", line)
+        sizes.append((int(sm.group(1)), int(sm.group(2))) if sm else (0, 0))
     if tracks == 0:
         return None
-    return {"tracks": tracks, "codecs": codecs}
+    return {"tracks": tracks, "codecs": codecs, "titles": titles, "sizes": sizes}

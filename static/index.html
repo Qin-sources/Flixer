@@ -3691,7 +3691,10 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
     var _audioOk = _canPlayAudio(_ai.codec || _ai.raw_codec || '');
     var _videoOk = _codecs.length ? _canPlayVideo(_codecs[0]) : true;
     // 多视频轨（防和谐假轨）浏览器无法切轨 → 只能 mpv
-    var _needMpv = (!_audioOk) || (!_videoOk) || (_tracks > 1);
+    var _needMpv = (!_audioOk) || (!_videoOk);
+    // 多视频轨（假轨）：不再交给 mpv，改用服务器换轨重封装后原生播放
+    var _remux = (_tracks > 1);
+    if (_remux) _needMpv = false;
     try {
       if (window.__flxDiag) console.log('[flx] audio=' + (_ai.codec||'') + ' ok=' + _audioOk +
         ' video=' + (_codecs[0]||'') + ' ok=' + _videoOk + ' tracks=' + _tracks + ' mpv=' + _needMpv);
@@ -3722,7 +3725,29 @@ if (window._preferWebPlayer !== true){
   renderSubs(d);
 
   plVeil('正在缓冲…');
-  if (!_mpvOn) v.src = d.stream;
+  let _remuxBase = 0;
+if (!_mpvOn){
+  if (_remux){
+    // 选真正的正片轨：标题含 notice/提示 的跳过，否则取第 2 条
+    // 挑正片轨：分辨率最大的那条（假轨通常是小画面提示）
+    const _sizes = (_vi && _vi.sizes) ? _vi.sizes : [];
+    let _idx = 1;
+    if (_sizes.length > 1){
+      let _best = -1;
+      for (let i = 0; i < _sizes.length; i++){
+        const a = (_sizes[i][0] || 0) * (_sizes[i][1] || 0);
+        if (a > _best){ _best = a; _idx = i; }
+      }
+    }
+    const _vc = ((_vi && _vi.codecs && _vi.codecs[_idx]) || '').toLowerCase();
+    const _mk = (ss) => '/api/remux?fid=' + encodeURIComponent(d.fid) +
+      '&v=' + _idx + '&vc=' + encodeURIComponent(_vc) + '&ss=' + (ss || 0);
+    window.__remuxMake = _mk;
+    v.src = _mk(0);
+  } else {
+    v.src = d.stream;
+  }
+}
 
   // 原生播放兜底：报错或 6 秒没画面 → 自动改走 mpv
   if (!_mpvOn){
@@ -3749,6 +3774,24 @@ if (window._preferWebPlayer !== true){
       if (v.videoWidth || v.duration > 0 || v.currentTime > 0) return;
       _fallback('画面一直没有出来');
     }, 25000);
+  }
+
+  // remux 流不支持 Range：拖动后从目标时间点重启
+  if (_remux){
+    let _rs = false;
+    v.addEventListener('seeking', () => {
+      if (!alive() || _rs) return;
+      const target = v.currentTime || 0;
+      if (Math.abs(target - _remuxBase) < 4) return;
+      _rs = true;
+      _remuxBase = target;
+      try {
+        const was = !v.paused;
+        v.src = window.__remuxMake(target);
+        if (was) v.play().catch(() => {});
+      } catch(e){}
+      setTimeout(() => { _rs = false; }, 1200);
+    });
   }
 
   /* 静音状态同步（带图标反馈） */

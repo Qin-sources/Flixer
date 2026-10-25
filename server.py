@@ -237,6 +237,64 @@ def _probe_report():
         return err("保存失败: %s" % e, 500)
 
 
+@app.route("/api/remux")
+def api_remux():
+    """把任意片源换成浏览器能播的单视频轨 fMP4（视频 copy，音频必要时转 AAC）"""
+    from flask import Response
+    import subprocess as _sp
+    import threading as _th
+
+    fid = (request.args.get("fid") or "").strip()
+    if not fid:
+        return err("缺少 fid")
+    try:
+        vi = int(float(request.args.get("v") or 0))
+        ai = int(float(request.args.get("a") or 0))
+        ss = float(request.args.get("ss") or 0)
+    except Exception:
+        vi, ai, ss = 0, 0, 0.0
+    vc = (request.args.get("vc") or "").lower()
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    exe = os.path.join(base, "bin", "ffmpeg.exe")
+    if not os.path.exists(exe):
+        return err("未找到 ffmpeg", 500)
+
+    src = "http://127.0.0.1:7100/api/stream?fid=" + fid
+    cmd = [exe, "-hide_banner", "-loglevel", "error"]
+    if ss > 0:
+        cmd += ["-ss", "%.3f" % ss]
+    cmd += ["-i", src,
+            "-map", "0:v:%d" % vi, "-map", "0:a:%d" % ai,
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "640k",
+            "-sn", "-dn",
+            "-f", "mp4", "-movflags", "+empty_moov+default_base_moof+frag_keyframe",
+            "-frag_duration", "500000", "pipe:1"]
+    if vc == "hevc":
+        cmd[-3:-3] = ["-tag:v", "hvc1"]
+
+    proc = _sp.Popen(cmd, stdout=_sp.PIPE, stderr=_sp.DEVNULL,
+                     creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0))
+
+    def gen():
+        try:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+    resp = Response(gen(), mimetype="video/mp4")
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Accept-Ranges"] = "none"
+    return resp
+
+
 @app.route("/api/mpv/play", methods=["POST", "GET"])
 def api_mpv_play():
     """用 mpv 播放（网页当遥控器）"""
