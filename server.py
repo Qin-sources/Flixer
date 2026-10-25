@@ -1542,6 +1542,35 @@ def api_daily():
         return jsonify({"ok": False, "error": str(e)[:140]})
 
 
+@app.route("/api/discover")
+def api_discover():
+    """精确筛选：媒体类型 + 地区 + 类型 + 排序 + 分页（TMDB discover）"""
+    try:
+        from services import discover as D
+        media = (request.args.get("media") or "电影").strip()
+        region = (request.args.get("region") or "全部").strip()
+        genre = (request.args.get("genre") or "全部").strip()
+        sort = (request.args.get("sort") or "热度").strip()
+        page = int(request.args.get("page") or 1)
+        yf = request.args.get("year_from")
+        yt = request.args.get("year_to")
+        data = D.discover(media=media, region=region, genre=genre, sort=sort,
+                          page=max(1, min(500, page)),
+                          year_from=int(yf) if yf else None,
+                          year_to=int(yt) if yt else None)
+        return ok(data)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return err("筛选失败: %s" % e, 500)
+
+
+@app.route("/api/discover/options")
+def api_discover_options():
+    from services import discover as D
+    return ok(D.options())
+
+
 @app.route("/api/browse")
 def api_browse():
     """电影 / 剧集 的按题材分行内容"""

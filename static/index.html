@@ -4279,6 +4279,7 @@ let _fvOpts = null;
 let FREGIONS = [];
 let FYEARS = [];
 let FGENRES = [];
+const FMEDIA = ['全部', '电影', '电视剧', '纪录片', '综艺', '动漫'];
 const FSORTS = ['综合', '时间', '评分'];
 
 const F_FALLBACK = {
@@ -4332,7 +4333,7 @@ async function openFilter(media){
 
     <div class="frows">
       ${frowHtml('地区', FREGIONS, 'region')}
-      ${frowHtml('年份', FYEARS, 'year')}
+      ${frowHtml('门类', FMEDIA, 'mtype')}
       ${frowHtml('类型', FGENRES, 'genre')}
       ${frowHtml('排序', FSORTS, 'sort')}
     </div>
@@ -4355,13 +4356,12 @@ async function openFilter(media){
 
 function fQuery(){
   const q = new URLSearchParams();
-  if (FSTATE.region !== '全部') q.set('regions', FSTATE.region);
-  if (FSTATE.year !== '全部') q.set('year', FSTATE.year);
-  if (FSTATE.genre !== '全部') q.set('genres', FSTATE.genre);
-  const sortMap = {'综合':'U', '时间':'S', '评分':'R'};
-  q.set('sort', sortMap[FSTATE.sort] || 'U');
-  q.set('media', FSTATE.media);
-  q.set('start', String(FSTATE.page * 40));
+  q.set('media', FSTATE.mtype || '全部');
+  if (FSTATE.region && FSTATE.region !== '全部') q.set('region', FSTATE.region);
+  if (FSTATE.genre && FSTATE.genre !== '全部') q.set('genre', FSTATE.genre);
+  const sortMap = {'综合': '热度', '时间': '最新', '评分': '评分', '热度': '热度', '最新': '最新'};
+  q.set('sort', sortMap[FSTATE.sort] || '热度');
+  q.set('page', String(Math.max(1, (FSTATE.page || 0) + 1)));
   return q;
 }
 
@@ -4384,9 +4384,16 @@ async function runFilter(reset){
   if (cnt) cnt.textContent = '加载中…';
 
   try {
-    const j = await (await fetch('/api/filter?' + fQuery().toString())).json();
+    const j = await (await fetch('/api/discover?' + fQuery().toString())).json();
     const items = ((j.data||{}).items) || [];
+    // TMDB discover 字段 → 卡片字段
+    items.forEach(it => {
+      it.is_tv = (it.media === 'tv');
+      it.douban_id = it.douban_id || '';
+      it.rating = it.rating || 0;
+    });
     if (cnt) cnt.textContent = items.length ? (items.length + ' 部') : '';
+    FSTATE.totalPages = (j.data || {}).total_pages || 1;
 
     if (!items.length){
       g.innerHTML = '<div class="fv-empty" style="grid-column:1/-1">'
@@ -4403,10 +4410,21 @@ async function runFilter(reset){
     if (window.Motion) Motion.animate(g, {opacity:[0,1]}, {duration:.3});
 
     if (more){
-      more.innerHTML = items.length >= 20
-        ? '<button class="btn btn-gray" id="fvMoreBtn">加载更多</button>' : '';
-      const mb = $('#fvMoreBtn');
-      if (mb) mb.onclick = () => { FSTATE.page += 1; runFilter(false); };
+      more.innerHTML = '';
+      // 无限滚动：滚到底自动加载下一页
+      if (!window.__fvScrollBound){
+        window.__fvScrollBound = true;
+        window.addEventListener('scroll', () => {
+          if (!document.getElementById('fvGrid')) return;
+          if (window.__fvLoading) return;
+          if (FSTATE.page + 1 >= (FSTATE.totalPages || 1)) return;
+          const rest = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+          if (rest > 600) return;
+          window.__fvLoading = true;
+          FSTATE.page += 1;
+          runFilter(false).finally(() => { window.__fvLoading = false; });
+        }, { passive: true });
+      }
     }
   } catch(e){
     if (cnt) cnt.textContent = '';
