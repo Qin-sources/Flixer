@@ -903,12 +903,41 @@ def api_source_status():
 
 
 @app.route("/api/home")
+
+
+def _clean_posters(obj):
+    """统一清洗海报域名：亚马逊/IMDb 的图一律换成豆瓣原图"""
+    try:
+        if isinstance(obj, dict):
+            p = obj.get("poster") or ""
+            if isinstance(p, str) and p:
+                low = p.lower()
+                bad = ("media-amazon.com" in low) or ("media-imdb.com" in low)
+                if bad:
+                    rc = obj.get("raw_cover") or obj.get("cover") or ""
+                    if isinstance(rc, str) and "doubanio" in rc.lower():
+                        obj["poster"] = rc
+                        obj["poster_from"] = "douban"
+                good = ("image.tmdb.org" in low) or ("doubanio.com" in low)
+                if not good and not (obj.get("poster") or "").lower().startswith("http"):
+                    obj["poster"] = ""
+            for v in list(obj.values()):
+                _clean_posters(v)
+        elif isinstance(obj, list):
+            for v in obj:
+                _clean_posters(v)
+    except Exception:
+        pass
+    return obj
+
+
 def api_home():
     """首页：豆瓣榜单单 + showpaw 元数据"""
     try:
         maxn = int(request.args.get("n") or 20)
         data = H.build_home(max_per_row=max(6, min(30, maxn)))
         data["hero"] = H.hero_pick(data)
+        _clean_posters(data)          # 海报域名清洗（亚马逊图换成豆瓣原图）
         return ok(data)
     except Exception as e:
         traceback.print_exc()
