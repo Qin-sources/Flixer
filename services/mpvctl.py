@@ -501,8 +501,26 @@ def status():
         hw = _get("hwdec-current", 0.4)
     except Exception:
         pass
+    file_loaded = False
+    try:
+        file_loaded = bool(_get("file-loaded", 0.4))
+    except Exception:
+        pass
+    idle = False
+    try:
+        idle = bool(_get("idle-active", 0.4))
+    except Exception:
+        pass
+    vcodec = None
+    try:
+        vcodec = _get("video-codec", 0.4)
+    except Exception:
+        pass
     return {
         "running": True,
+        "file_loaded": file_loaded,
+        "idle": idle,
+        "vcodec": vcodec,
         "width": int(_get("width", 0.4) or 0),
         "frames": frames,
         "hwdec": hw,
