@@ -123,7 +123,7 @@ def _ensure_locked():
     if not available():
         raise IOError("未找到 mpv")
     if _proc is None or _proc.poll() is not None:
-        args = [_MPV, "--no-config", "--idle=yes", "--pause=yes", "--force-window=no",
+        args = [_MPV, "--no-config", "--idle=yes", "--pause=yes", "--vid=no", "--force-window=no",
                 "--no-border", "--ontop", "--focus-on=never", "--keepaspect-window=no", "--hidpi-window-scale=no", 
                 "--keep-open=no", "--hwdec=auto-safe", "--osc=yes", "--osd-level=1", "--osd-duration=2000",
                 "--input-ipc-server=" + PIPE_NAME]
@@ -355,11 +355,12 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None):
         pass
 
     # 有些文件加载后会停在暂停态，这里再确保一次在播
-    # 选好正片轨再开始播，避免先闪一下假轨
+    # 选好正片轨再打开视频输出并播放：全程不渲染假轨
     try:
         _apply_video_track(tries=25)
     except Exception:
         pass
+    _send({"command": ["set_property", "force-window", True]}, 1.0)
     _send({"command": ["set_property", "pause", False]}, 0.8)
     return r
 

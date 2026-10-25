@@ -3517,6 +3517,26 @@ function _canPlayVideo(codec){
 
 /* 统一走 mpv：解析片源 → 起 mpv → 轻提示（不打开播放页） */
 async function playInMpv(url, pwd, title, ep){
+  try {
+    return await playInMpvInner(url, pwd, title, ep);
+  } catch(e){
+    try {
+      let t = document.getElementById('mpvToast');
+      if (!t){
+        t = document.createElement('div');
+        t.id = 'mpvToast';
+        t.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:99999;background:rgba(20,20,20,.96);'
+          + 'color:#eee;border:1px solid #2e2e2e;border-radius:8px;padding:14px 18px;'
+          + 'font:13px/1.7 system-ui,"Microsoft YaHei";max-width:360px';
+        document.body.appendChild(t);
+      }
+      t.textContent = '播放失败：' + (e && e.message ? e.message : e);
+      t.style.opacity = '1';
+    } catch(_){}
+  }
+}
+
+async function playInMpvInner(url, pwd, title, ep){
   const toast = (msg, ms) => {
     try {
       let t = document.getElementById('mpvToast');
