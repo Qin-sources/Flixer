@@ -51,7 +51,27 @@ def ensure(wait=20.0, quiet=True):
     env = dict(os.environ)
     env.setdefault("ENABLED_PLUGINS", PLUGINS)
     env.setdefault("CACHE_TTL", "30m")
-    env.setdefault("PLUGIN_TIMEOUT", "6s")
+    env.setdefault("PLUGIN_TIMEOUT", "12s")
+    # 搜索链路允许走代理（播放链路必须直连，两者互不影响）
+    _px = os.environ.get("FLIXER_SEARCH_PROXY") or "http://127.0.0.1:7897"
+    try:
+        import socket as _sk
+        with _sk.socket() as _s2:
+            _s2.settimeout(0.25)
+            _alive = _s2.connect_ex(("127.0.0.1", int(_px.rsplit(":", 1)[1]))) == 0
+    except Exception:
+        _alive = False
+    if _alive:
+        env.setdefault("HTTP_PROXY", _px)
+        env.setdefault("HTTPS_PROXY", _px)
+        env.setdefault("ALL_PROXY", _px)
+        env.setdefault("NO_PROXY", "127.0.0.1,localhost")
+    # 走代理后单次请求 6-7 秒，默认 4 秒必然超时 → 全部放宽
+    env.setdefault("ASYNC_RESPONSE_TIMEOUT", "15s")
+    env.setdefault("PLUGIN_BATCH_TIMEOUT_SECONDS", "20")
+    env.setdefault("TG_CHANNEL_TIMEOUT_SECONDS", "20")
+    env.setdefault("TG_CHANNEL_REQUEST_TIMEOUT_SECONDS", "15")
+    env.setdefault("ASYNC_PLUGIN_ENABLED", "true")
     try:
         _proc = subprocess.Popen(
             [PANSOU_EXE],
