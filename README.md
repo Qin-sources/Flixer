@@ -1,5 +1,9 @@
 # Flixer
 
+<p align="center">
+  <b>简体中文</b> · <a href="README.en.md">English</a>
+</p>
+
 一个跑在自己电脑上的影视聚合站：**豆瓣/TMDB 选片 + 网盘搜索找源 + mpv 直接播放**。
 不搞盗链聚合站那套，也不做 CMS——只要「点一下就能看 4K」。
 
