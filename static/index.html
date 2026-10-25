@@ -1696,6 +1696,57 @@ function renderResults(d, title){
 
 function porow(arr){ return arr.map(r=>srcRowHtml(r,true)).join(''); }
 
+/* 自动解析提取码：链接参数 → 标题文字 → 括号里的 4 位码 */
+
+/* 分享链接弹窗（可复制） */
+function showShareLink(url, pwd, title){
+  try {
+    var old = document.getElementById('lnkBox'); if (old) old.remove();
+    var w = document.createElement('div');
+    w.id = 'lnkBox';
+    w.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.72);display:grid;place-items:center';
+    var code = _pwdOf(url, title, pwd);
+    w.innerHTML = '<div style="width:min(620px,92vw);background:#141414;border-radius:10px;padding:22px;'
+      + 'color:#eee;font:14px/1.7 system-ui,\'Microsoft YaHei\'">'
+      + '<div style="font-size:15px;font-weight:600;margin-bottom:10px">' + (title || '分享链接') + '</div>'
+      + '<div style="color:#8a8a8a;font-size:12.5px;margin-bottom:6px">链接</div>'
+      + '<div id="lnkUrl" style="word-break:break-all;background:#1b1b1b;border:1px solid #2b2b2b;'
+      + 'border-radius:6px;padding:10px 12px;font-size:13px">' + url + '</div>'
+      + (code ? '<div style="color:#8a8a8a;font-size:12.5px;margin:10px 0 6px">提取码</div>'
+        + '<div id="lnkPwd" style="font-size:16px;font-weight:700;letter-spacing:2px;color:#e50914">' + code + '</div>' : '')
+      + '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">'
+      + '<button id="lnkCopy" style="background:#e50914;border:none;color:#fff;border-radius:5px;'
+      + 'padding:8px 18px;cursor:pointer;font-size:13px">复制链接</button>'
+      + '<button id="lnkClose" style="background:none;border:1px solid #333;color:#bbb;border-radius:5px;'
+      + 'padding:8px 18px;cursor:pointer;font-size:13px">关闭</button></div></div>';
+    document.body.appendChild(w);
+    w.querySelector('#lnkCopy').onclick = function(){
+      var txt = url + (code ? ('  提取码: ' + code) : '');
+      try {
+        navigator.clipboard.writeText(txt);
+        this.textContent = '已复制';
+        setTimeout(() => { this.textContent = '复制链接'; }, 1500);
+      } catch(e){ prompt('复制下面内容：', txt); }
+    };
+    w.querySelector('#lnkClose').onclick = () => w.remove();
+    w.addEventListener('click', ev => { if (ev.target === w) w.remove(); });
+  } catch(e){}
+}
+
+function _pwdOf(url, title, given){
+  var g = String(given || '').trim();
+  if (/^[A-Za-z0-9]{4}$/.test(g)) return g;
+  var u = String(url || '');
+  var m1 = u.match(/[?&](?:pwd|passcode|code|password)=([A-Za-z0-9]{4})/i);
+  if (m1) return m1[1];
+  var t = String(title || '');
+  var m2 = t.match(/(?:提取码|提取碼|密码|密碼|访问码|訪問碼|暗号)\s*[:：=]?\s*([A-Za-z0-9]{4})/);
+  if (m2) return m2[1];
+  var m3 = t.match(/[\\s\\(\[（【]\s*([A-Za-z0-9]{4})\s*[\\)\]）】]?\s*$/);
+  if (m3) return m3[1];
+  return '';
+}
+
 function srcRowHtml(r, unknownRes){
   const q = r.quality || {};
   const tags = [];
@@ -1728,6 +1779,8 @@ function srcRowHtml(r, unknownRes){
     ${canPlay ? `<button class="s-btn primary" data-play="1"
        data-url="${esc(r.pan_url)}" data-pwd="${esc(r.passcode||'')}"
        data-title="${esc(r.title)}">${r.live_state==='pwd'?'输入提取码':'▶ 播放'}</button>` : ''}
+    <button class="s-btn ghost" data-link="1" data-url="${esc(r.pan_url)}"
+      data-pwd="${esc(r.passcode||'')}" data-title="${esc(r.title)}">链接</button>
     <button class="s-btn ${canProbe?'':'ghost'}" data-url="${esc(r.pan_url)}" data-pwd="${esc(r.passcode||'')}" ${canProbe?'':'disabled'}>
       ${isQuark?(unknownRes?'核实':'看剧集'):(canProbe?'打开':'不可用')}</button>
   </div>`;
@@ -4439,7 +4492,7 @@ document.addEventListener('click', e=>{
   if (pb){
     e.preventDefault();
     e.stopPropagation();
-    let pwd = pb.dataset.pwd || '';
+    let pwd = _pwdOf(pb.dataset.url, pb.dataset.title, pb.dataset.pwd || '');
     const row = pb.closest('.srow');
     // 检测标记为「需提取码」且没有密码时，让用户输一次
     if (!pwd && row && row.dataset.needpwd === '1'){
@@ -4454,6 +4507,12 @@ document.addEventListener('click', e=>{
 addEventListener('keydown', e=>{ if (e.key === 'Escape') closeDetail(); });
 
 document.addEventListener('click', e=>{
+  const lk = e.target.closest('[data-link]');
+  if (lk){
+    e.preventDefault(); e.stopPropagation();
+    showShareLink(lk.dataset.url, lk.dataset.pwd || '', lk.dataset.title || '');
+    return;
+  }
   const b = e.target.closest('.s-btn[data-url]');
   if (b && !b.disabled) openShare(b.dataset.url, b.dataset.pwd);
 });
