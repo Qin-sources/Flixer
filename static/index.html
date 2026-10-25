@@ -817,6 +817,15 @@ html.fs-on .pl-ctrl{
   max-height:calc(100vh - 200px - var(--dock)) !important;width:100% !important}
 .pl-wrap.mpv-mode .pl-body{height:auto !important}
 .pl-ctrl{flex:0 0 auto;margin-top:12px}
+/* ===== 进度条：用真实 id（plProg/plPlayed/plBuf/plKnob）===== */
+#plProg{position:relative;flex:1 1 auto;min-width:140px;height:4px;
+  background:#3a3a3a;border-radius:2px;cursor:pointer;overflow:visible}
+#plBuf{position:absolute;left:0;top:0;bottom:0;width:0;background:#6b6b6b;border-radius:2px}
+#plPlayed{position:absolute;left:0;top:0;bottom:0;width:0;background:#e50914;border-radius:2px}
+#plKnob{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;
+  background:#e50914;border-radius:50%;box-shadow:0 0 0 3px rgba(229,9,20,.22);
+  opacity:0;transition:opacity .15s}
+#plProg:hover #plKnob{opacity:1}
 </style>
   <script src="/vendor/hls.min.js"></script>
 </head>
