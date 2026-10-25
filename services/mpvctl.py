@@ -380,7 +380,43 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=
         pass
     _send({"command": ["set_property", "force-window", True]}, 1.0)
     _send({"command": ["set_property", "pause", False]}, 0.8)
+    # 起播后盯 6 秒：解码器没出帧就自动改软解（解决部分显卡 HEVC 黑屏）
+    try:
+        import threading as _th2
+        _th2.Thread(target=_hw_watchdog, args=(6.0,), daemon=True).start()
+    except Exception:
+        pass
     return r
+
+
+
+
+def _hw_watchdog(wait=6.0):
+    """硬解失败（有尺寸但没帧）→ 自动切软解并回到原位置"""
+    try:
+        time.sleep(wait)
+        if not is_running():
+            return
+        w = _get("width", 0.6)
+        if not w:
+            return
+        frames = _get("estimated-frame-number", 0.6) or 0
+        try:
+            frames = float(frames)
+        except Exception:
+            frames = 0
+        if frames >= 5:
+            return                       # 正常出帧，不用管
+        pos = _get("time-pos", 0.6) or 0
+        _send({"command": ["set_property", "hwdec", "no"]}, 1.0)
+        time.sleep(0.4)
+        try:
+            _send({"command": ["seek", float(pos), "absolute"]}, 1.0)
+        except Exception:
+            pass
+        _send({"command": ["set_property", "pause", False]}, 0.6)
+    except Exception:
+        pass
 
 
 def append(url, title="", headers=None):
