@@ -902,9 +902,6 @@ def api_source_status():
     })
 
 
-@app.route("/api/home")
-
-
 def _clean_posters(obj):
     """统一清洗海报域名：亚马逊/IMDb 的图一律换成豆瓣原图"""
     try:
@@ -929,6 +926,9 @@ def _clean_posters(obj):
     except Exception:
         pass
     return obj
+
+
+@app.route("/api/home")
 
 
 def api_home():
