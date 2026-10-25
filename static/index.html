@@ -3660,6 +3660,26 @@ async function playInMpvInner(url, pwd, title, ep){
     fetch('/api/mpv/ping', { method: 'POST' }).catch(() => {});
   } catch(e){}
 
+  // 黑屏诊断：起播 20 秒内在提示条显示 mpv 真实状态
+  try {
+    clearInterval(window.__mpvDiag);
+    let n = 0;
+    window.__mpvDiag = setInterval(async () => {
+      n++;
+      if (n > 20){ clearInterval(window.__mpvDiag); return; }
+      try {
+        const st = (await (await fetch('/api/mpv/status')).json()).data || {};
+        const t = document.getElementById('mpvToast');
+        if (!t) return;
+        const line = '画面 ' + (st.width || 0) + 'px · 帧 ' + (st.frames || 0)
+          + ' · 解码 ' + (st.hwdec || '?') + ' · ' + Math.round(st.time || 0) + 's';
+        t.innerHTML = '<div>' + line + '</div>'
+          + '<div style="color:#8a8a8a;font-size:11.5px;margin-top:4px">诊断中（20 秒后消失）</div>';
+        t.style.opacity = '1';
+      } catch(e){}
+    }, 1000);
+  } catch(e){}
+
   const eps = (d.episodes || []).length;
 
   // 后台把后续集数追加进 mpv 播放列表：之后可用 mpv 的 > / n 换集

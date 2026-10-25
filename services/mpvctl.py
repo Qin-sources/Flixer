@@ -491,8 +491,21 @@ def status():
         if pv is not None:
             _cache["pause"] = bool(pv)
     p = _cache.get("pause")
+    frames = 0
+    try:
+        frames = int(float(_get("estimated-frame-number", 0.4) or 0))
+    except Exception:
+        frames = 0
+    hw = None
+    try:
+        hw = _get("hwdec-current", 0.4)
+    except Exception:
+        pass
     return {
         "running": True,
+        "width": int(_get("width", 0.4) or 0),
+        "frames": frames,
+        "hwdec": hw,
         "time": float(t or 0),
         "duration": float(_cache.get("duration") or 0),
         "pause": bool(p) if p is not None else False,
