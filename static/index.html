@@ -3567,9 +3567,41 @@ async function playInMpv(url, pwd, title, ep){
     if (!r || !r.ok){ toast('启动 mpv 失败：' + ((r && r.error) || '')); return; }
   } catch(e){ toast('启动 mpv 失败：' + (e.message || '')); return; }
 
+  // 心跳：让后端看门狗知道网页还活着（否则 20 秒后会把 mpv 杀掉）
+  try {
+    clearInterval(window.__mpvBeat);
+    window.__mpvBeat = setInterval(() => {
+      fetch('/api/mpv/ping', { method: 'POST' }).catch(() => {});
+    }, 5000);
+    fetch('/api/mpv/ping', { method: 'POST' }).catch(() => {});
+  } catch(e){}
+
   const eps = (d.episodes || []).length;
-  toast('已在 mpv 中播放' + (eps > 1 ? '（第 ' + ((d.ep_index || 0) + 1) + ' 集）' : '')
-        + '<br><span style="color:#8a8a8a;font-size:12px">鼠标移到画面上可调进度/音轨/字幕</span>');
+  let extra = '<br><span style="color:#8a8a8a;font-size:12px">鼠标移到画面上可调进度/音轨/字幕</span>';
+  if (eps > 1){
+    const cur = (d.ep_index || 0);
+    let btns = '';
+    for (let i = 0; i < eps; i++){
+      btns += '<button data-ep="' + i + '" style="margin:3px 4px 0 0;padding:3px 9px;'
+        + 'border-radius:4px;border:1px solid ' + (i === cur ? '#e50914' : '#333')
+        + ';background:' + (i === cur ? '#e50914' : '#1c1c1c') + ';color:#eee;cursor:pointer;font-size:12px">'
+        + (i + 1) + '</button>';
+    }
+    extra = '<div style="margin-top:8px;max-height:120px;overflow:auto">' + btns + '</div>'
+      + '<div style="color:#8a8a8a;font-size:11.5px;margin-top:6px">点集号直接换集</div>';
+    setTimeout(() => {
+      try {
+        const box = document.getElementById('mpvToast');
+        if (!box) return;
+        box.querySelectorAll('button[data-ep]').forEach(b => {
+          b.onclick = () => playInMpv(url, pwd, title, Number(b.dataset.ep));
+        });
+        box.__h && clearTimeout(box.__h);
+        box.style.opacity = '1';
+      } catch(e){}
+    }, 30);
+  }
+  toast('已在 mpv 中播放' + (eps > 1 ? '（第 ' + ((d.ep_index || 0) + 1) + ' 集）' : '') + extra, 60000);
   try { window.__mpvFid = d.fid; window.__mpvTitle = title || d.name || ''; } catch(e){}
 }
 
@@ -5017,6 +5049,11 @@ document.addEventListener('keydown', function(e){
   }
   if (!raf) raf = requestAnimationFrame(tick);
 })();
+
+/* 离开页面时停心跳（后端会随之退出 mpv） */
+window.addEventListener('pagehide', function(){
+  try { clearInterval(window.__mpvBeat); } catch(e){}
+});
 </script>
 </body>
 </html>

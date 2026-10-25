@@ -202,6 +202,16 @@ def _find_mpv():
     return None
 
 
+@app.route("/api/mpv/ping", methods=["POST", "GET"])
+def api_mpv_ping():
+    from services import mpvctl as MPV
+    try:
+        MPV._touch()
+    except Exception:
+        pass
+    return ok({"alive": True})
+
+
 @app.route("/api/mpv/fit", methods=["POST", "GET"])
 def api_mpv_fit():
     """把 mpv 窗口摆到指定矩形（起播后再校正一次，防 mpv 自己改小）"""
