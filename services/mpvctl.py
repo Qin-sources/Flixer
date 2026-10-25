@@ -364,6 +364,26 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None):
     return r
 
 
+def append(url, title="", headers=None):
+    """把一个文件追加到 mpv 播放列表尾部"""
+    _touch()
+    _ensure()
+    try:
+        if headers:
+            ua = headers.get("User-Agent") or headers.get("user-agent")
+            if ua:
+                _send({"command": ["set_property", "user-agent", ua]}, 0.8)
+            hdr = []
+            for k in ("Referer", "Cookie", "Origin"):
+                if headers.get(k):
+                    hdr.append("%s: %s" % (k, headers[k]))
+            if hdr:
+                _send({"command": ["set_property", "http-header-fields", ",".join(hdr)]}, 0.8)
+        return _send({"command": ["loadfile", url, "append"]}, 3.0)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def cmd(name, value=None):
     _touch()
     _ensure()

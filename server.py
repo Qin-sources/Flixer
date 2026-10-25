@@ -212,6 +212,18 @@ def api_mpv_ping():
     return ok({"alive": True})
 
 
+@app.route("/api/mpv/append", methods=["POST", "GET"])
+def api_mpv_append():
+    """把某一集追加到 mpv 播放列表（视频走本机代理，避免逐集解析直链）"""
+    from services import mpvctl as MPV
+    fid = (request.args.get("fid") or "").strip()
+    if not fid:
+        return err("缺少 fid")
+    url = "http://127.0.0.1:7100/api/stream?fid=" + fid
+    r = MPV.append(url, request.args.get("title") or "")
+    return ok({"appended": True, "reply": r})
+
+
 @app.route("/api/mpv/fit", methods=["POST", "GET"])
 def api_mpv_fit():
     """把 mpv 窗口摆到指定矩形（起播后再校正一次，防 mpv 自己改小）"""

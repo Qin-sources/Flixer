@@ -3582,6 +3582,28 @@ async function playInMpv(url, pwd, title, ep){
   } catch(e){}
 
   const eps = (d.episodes || []).length;
+
+  // 后台把后续集数追加进 mpv 播放列表：之后可用 mpv 的 > / n 换集
+  if (eps > 1){
+    (async () => {
+      const cur = (d.ep_index || 0);
+      for (let i = 0; i < eps; i++){
+        if (i === cur) continue;
+        try {
+          const q = '/api/play?share=' + encodeURIComponent(url)
+            + (pwd ? '&pwd=' + encodeURIComponent(pwd) : '')
+            + '&title=' + encodeURIComponent(title || '') + '&ep=' + i;
+          const jj = await (await fetch(q)).json();
+          const dd = jj.data || jj;
+          if (dd && dd.fid){
+            await fetch('/api/mpv/append?fid=' + encodeURIComponent(dd.fid)
+              + '&title=' + encodeURIComponent('第 ' + (i + 1) + ' 集'), { method: 'POST' });
+          }
+        } catch(e){}
+      }
+    })();
+  }
+
   let extra = '<br><span style="color:#8a8a8a;font-size:12px">鼠标移到画面上可调进度/音轨/字幕</span>';
   if (eps > 1){
     const cur = (d.ep_index || 0);
