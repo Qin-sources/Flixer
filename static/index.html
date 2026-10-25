@@ -1585,7 +1585,12 @@ function closeDetail(fromPop){
     _detailFromQuery = null;
     _currentMovie = null;
     window.__restoreDetailScroll = true;
-    restoreView(v, q);
+    // 筛选页：不重新拉取/重绘（否则会闪、会跳回顶部、滚动进度丢失）
+    if (v === 'filter'){
+      try { if (typeof setTab === 'function') setTab('filter'); } catch(e){}
+    } else {
+      restoreView(v, q);
+    }
     setTimeout(() => { window.__restoreDetailScroll = false; }, 900);
     // 回到原来的滚动位置（视图重渲染会重置 scroll，所以多补几次）
     try {
