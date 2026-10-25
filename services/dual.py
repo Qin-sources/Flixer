@@ -57,11 +57,14 @@ KEEP_PAN_TYPES = {"quark", "uc", "115", "123", "aliyun", "magnet", "ed2k"}
 # 明确不要：baidu（需客户端）、xunlei（需客户端）
 
 
-def _pansou_once(base, kw, timeout):
+def _pansou_once(base, kw, timeout, nocache=False):
     """打一次 PanSou，返回原始 merged_by_type"""
     try:
+        params = {"kw": kw, "res": "merge"}
+        if nocache:
+            params["cache"] = "false"
         r = _search_session.get(base + "/api/search",
-                                params={"kw": kw, "res": "merge"},
+                                params=params,
                                 timeout=timeout)
         if r.status_code != 200:
             return None
@@ -74,7 +77,32 @@ def _pansou_once(base, kw, timeout):
 
 def pansou_search(kw, timeout=90):
     """PanSou 搜索：本地优先，失败自动切公共实例"""
-    merged = _pansou_once(PANSOU, kw, min(timeout, 30))
+    merged = _pansou_once(PANSOU, kw, min(timeout, 20), nocache=True)
+    # 插件异步：第一段常常只有零星结果，等几秒补第二段
+    try:
+        def _cnt(m):
+            if not isinstance(m, dict):
+                return 0
+            return sum(len(v) for v in m.values() if isinstance(v, list))
+        if _cnt(merged) < 3:
+            time.sleep(4)
+            m2 = _pansou_once(PANSOU, kw, min(timeout, 20))
+            if isinstance(m2, dict):
+                if not isinstance(merged, dict):
+                    merged = m2
+                else:
+                    for k, v in m2.items():
+                        if not isinstance(v, list):
+                            continue
+                        cur = merged.setdefault(k, [])
+                        have = {str(x.get("url") or x.get("link") or "") for x in cur}
+                        for it in v:
+                            u = str(it.get("url") or it.get("link") or "")
+                            if u and u not in have:
+                                cur.append(it)
+                                have.add(u)
+    except Exception:
+        pass
     if not merged:
         # 本地不可用（没代理 / 没插件 / 没启动）-> 走公共实例
         merged = _pansou_once(PANSOU_PUBLIC, kw, timeout)
