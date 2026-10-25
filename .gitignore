@@ -25,3 +25,8 @@ _*.log
 # 系统
 Thumbs.db
 desktop.ini
+
+# 备份文件
+*.bak*
+_*.py
+
