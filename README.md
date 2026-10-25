@@ -29,6 +29,20 @@
 
 ---
 
+---
+
+## 界面一览
+
+| 首页（开屏动画后的主视觉） | 精确筛选 |
+|---|---|
+| ![首页](docs/shot-home.png) | ![筛选](docs/shot-filter.png) |
+
+| 影片详情 | 网盘资源（自动验活） |
+|---|---|
+| ![详情](docs/shot-detail.png) | ![搜索](docs/shot-search.png) |
+
+---
+
 ## 一、普通用户：怎么跑起来
 
 ### 1. 你需要准备什么
@@ -324,6 +338,17 @@ engines, and play through **mpv via a direct link**. Real 4K, real Dolby, instan
 
 > Personal study and research only. **Not sold, no ads, no paid tier.**
 > A voluntary tip jar sits at the bottom of this page; it changes nothing about the software.
+
+
+## Screenshots
+
+| Home | Discover |
+|---|---|
+| ![Home](docs/shot-home.png) | ![Discover](docs/shot-filter.png) |
+
+| Detail | Sources (auto-verified) |
+|---|---|
+| ![Detail](docs/shot-detail.png) | ![Sources](docs/shot-search.png) |
 
 ## 0. Three things you must have
 
