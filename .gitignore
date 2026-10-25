@@ -30,3 +30,9 @@ desktop.ini
 *.bak*
 _*.py
 
+
+_*.err
+_flk/
+_edge_install.*
+_mockup_player.html
+
