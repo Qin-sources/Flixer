@@ -14,6 +14,21 @@
 
 ---
 
+## 〇、跑起来需要三样东西（缺一不可）
+
+| 依赖 | 干什么用 | 怎么准备 |
+|---|---|---|
+| **TMDB API Key** | 拿片名/海报/简介/筛选数据 | 注册 <https://www.themoviedb.org> → 设置 → API → 申请 v3 key（免费），把 32 位 key 存到 `data/tmdb_key.txt` |
+| **mpv 播放器** | 真正播放视频（网页只做遥控） | 从 <https://mpv.io/installation/> 下载 Windows 版，把 `mpv.exe` 放到 `bin/mpv/mpv.exe` |
+| **夸克网盘 Cookie** | 解析网盘直链 | 浏览器登录 <https://pan.quark.cn> → F12 → Network 任一请求 → 复制 `Cookie`，存到 `data/quark_cookie.json` |
+
+> 三者都在本地，`data/` 目录已被 `.gitignore` 忽略，不会被提交。
+> 没有 TMDB key：能搜片、能播放，但没有简介/海报/筛选。
+> 没有 mpv：页面会提示「已在 mpv 播放」但实际没有画面。
+> 没有夸克 cookie：解析直链会 412，什么也播不了。
+
+---
+
 ## 一、普通用户：怎么跑起来
 
 ### 1. 你需要准备什么
@@ -21,18 +36,25 @@
 | 东西 | 用途 | 必需 |
 |---|---|---|
 | Python 3.10+ | 跑后端 | 是 |
-| 夸克网盘账号 | 解析网盘直链（cookie 存本地） | 是 |
-| TMDB API Key（v3） | 片名/海报/简介 | 建议 |
-| mpv | 播放器（放 `bin/mpv/mpv.exe`） | 是 |
+| 夸克网盘账号 | 解析网盘直链（cookie 存本地） | **是**（否则 412，播不了） |
+| TMDB API Key（v3，免费申请） | 片名/海报/简介/筛选 | **强烈建议**（否则没有简介） |
+| mpv | 播放器（放 `bin/mpv/mpv.exe`） | **是**（否则没有画面） |
 | ffmpeg | 探测音视频编码（放 `bin/ffmpeg.exe`） | 是 |
 | PanSou（可选） | 本地网盘搜索兜底 | 否 |
 
 ### 2. 配置（都放本地，不会上传）
 
 ```
-data/quark_cookie.json   # 夸克 cookie（从浏览器 F12 复制）
 data/tmdb_key.txt        # 一行，32 位 TMDB v3 key
+                         # 申请：themoviedb.org → 设置 → API → 创建 → 复制 "API Key (v3 auth)"
+
+data/quark_cookie.json   # 夸克 cookie
+                         # 获取：登录 pan.quark.cn → F12 → Network → 任意请求
+                         #       → Request Headers → 复制整行 Cookie
+                         # 内容形如：{"cookie": "__puus=...; __pus=...; ..."}
 ```
+
+`data/quark_cookie.json` 也可以只写一行纯 cookie 字符串（程序两种都能读）。
 
 `data/` 整个目录已写进 `.gitignore`，**不会**被提交到仓库。
 
