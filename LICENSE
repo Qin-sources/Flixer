@@ -1,21 +1,66 @@
-MIT License
+# 非商业用途许可 / Non-Commercial License
 
 Copyright (c) 2026 Flixer
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## 中文
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+本项目（以下简称"本软件"）仅供**个人学习、技术研究与自用**，**绝不用于商业用途，绝不盈利**。
+
+### 允许
+
+- 个人下载、安装、运行，用于自己观看与研究
+- 阅读、学习、修改源码（修改后的版本同样受本许可约束）
+- 在注明出处的前提下分享本项目链接
+- 提交 Issue、Pull Request 帮助改进
+
+### 禁止
+
+- **任何形式的商业使用**：包括但不限于销售本软件、集成进付费产品、
+  作为商业服务的组成部分、用于企业内部经营行为
+- **任何形式的盈利行为**：包括但不限于收费分发、插入广告、
+  以本软件引流变现、接受以本软件为对价的赞助或打赏
+- 将本软件或其衍生作品用于违反当地法律法规的用途
+- 移除或隐藏本许可与免责声明
+
+### 免责
+
+本软件按"现状"提供，不附带任何明示或暗示的担保。
+本软件不存储、不托管任何影视内容，所有内容均来自第三方公开分享链接。
+使用者需自行确保其行为符合当地法律法规与各网盘服务条款，
+因使用本软件产生的一切后果由使用者自行承担。
+
+---
+
+## English
+
+This project ("the Software") is provided for **personal study, technical research
+and private use only**. It **must not be used commercially** and **must not be
+monetized in any way**.
+
+### Permitted
+
+- Personal download, installation and use for your own viewing and research
+- Reading, studying and modifying the source code (modified versions remain
+  subject to this license)
+- Sharing a link to this project with attribution
+- Opening issues and pull requests to help improve it
+
+### Prohibited
+
+- **Any commercial use**, including but not limited to selling the Software,
+  bundling it into a paid product, embedding it in a commercial service, or
+  using it in business operations
+- **Any monetization**, including but not limited to paid distribution,
+  advertising, traffic monetization, or accepting sponsorship/donations in
+  exchange for the Software
+- Any use that violates applicable laws or the terms of service of the
+  underlying network-drive providers
+- Removing or hiding this license and disclaimer
+
+### Disclaimer
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+IMPLIED. The Software stores and hosts no media content; all content comes from
+third-party public share links. Users are solely responsible for complying with
+applicable laws and provider terms of service. Any consequences arising from
+use of the Software are borne by the user.
