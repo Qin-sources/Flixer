@@ -252,7 +252,14 @@ def _apply_video_track(tries=12):
             tracks = (r or {}).get("data")
             if isinstance(tracks, list) and tracks:
                 vids = [t for t in tracks if t.get("type") == "video"]
-                if len(vids) <= 1:
+                if not vids:
+                    return True          # 纯音频，保持 vid=no
+                if len(vids) == 1:
+                    # 只有一条也要显式打开，否则 --vid=no 会一直黑屏
+                    try:
+                        _send({"command": ["set_property", "vid", vids[0].get("id")]}, 0.8)
+                    except Exception:
+                        pass
                     return True
                 want = _pick_video_track(tracks)
                 cur = _get("vid", 0.6)
