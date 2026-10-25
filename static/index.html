@@ -3510,7 +3510,74 @@ function _canPlayVideo(codec){
   try { return document.createElement('video').canPlayType(m) !== ''; } catch(e){ return true; }
 }
 
+/* 统一走 mpv：解析片源 → 起 mpv → 轻提示（不打开播放页） */
+async function playInMpv(url, pwd, title, ep){
+  const toast = (msg, ms) => {
+    try {
+      let t = document.getElementById('mpvToast');
+      if (!t){
+        t = document.createElement('div');
+        t.id = 'mpvToast';
+        t.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:99999;'
+          + 'background:rgba(20,20,20,.96);color:#eee;border:1px solid #2e2e2e;'
+          + 'border-radius:8px;padding:14px 18px;font:13px/1.7 system-ui,"Microsoft YaHei";'
+          + 'box-shadow:0 8px 30px rgba(0,0,0,.6);max-width:340px';
+        document.body.appendChild(t);
+      }
+      t.innerHTML = msg;
+      t.style.opacity = '1';
+      clearTimeout(t.__h);
+      t.__h = setTimeout(() => { t.style.opacity = '0'; }, ms || 4200);
+    } catch(e){}
+  };
+
+  toast('正在解析片源…', 8000);
+  let d;
+  try {
+    const epQ = (ep !== undefined && ep !== null && ep !== '') ? ('&ep=' + encodeURIComponent(ep)) : '';
+    const j = await (await fetch('/api/play?share=' + encodeURIComponent(url)
+      + (pwd ? '&pwd=' + encodeURIComponent(pwd) : '')
+      + '&title=' + encodeURIComponent(title || '') + epQ)).json();
+    d = j.data || j;
+  } catch(e){
+    toast('解析失败：' + (e.message || '网络错误'));
+    return;
+  }
+  if (!d || !d.ok){
+    const map = { SHARE_DEAD: '分享已失效', NEED_PASSCODE: '需要提取码', NEED_LOGIN: '夸克登录已过期',
+                  EMPTY_SHARE: '分享内容为空', NO_VIDEO: '这条分享里没有视频文件' };
+    toast((map[d && d.code] || '播不了') + (d && d.error ? '：' + d.error : ''));
+    return;
+  }
+
+  // 窗口：屏幕中央，16:9，约占可用区域 68%
+  let rect;
+  try {
+    const W = (window.screen.availWidth || 1600), H = (window.screen.availHeight || 900);
+    let w = Math.round(W * 0.68), h = Math.round(w * 9 / 16);
+    if (h > H * 0.72){ h = Math.round(H * 0.72); w = Math.round(h * 16 / 9); }
+    const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2);
+    rect = { x: x, y: y, w: w, h: h };
+  } catch(e){ rect = { x: 200, y: 120, w: 1100, h: 620 }; }
+
+  try {
+    const q = new URLSearchParams({ fid: d.fid, title: title || d.name || '',
+      x: rect.x, y: rect.y, w: rect.w, h: rect.h, direct: 1 });
+    const r = await (await fetch('/api/mpv/play?' + q.toString(), { method: 'POST' })).json();
+    if (!r || !r.ok){ toast('启动 mpv 失败：' + ((r && r.error) || '')); return; }
+  } catch(e){ toast('启动 mpv 失败：' + (e.message || '')); return; }
+
+  const eps = (d.episodes || []).length;
+  toast('已在 mpv 中播放' + (eps > 1 ? '（第 ' + ((d.ep_index || 0) + 1) + ' 集）' : '')
+        + '<br><span style="color:#8a8a8a;font-size:12px">鼠标移到画面上可调进度/音轨/字幕</span>');
+  try { window.__mpvFid = d.fid; window.__mpvTitle = title || d.name || ''; } catch(e){}
+}
+
 async function playQuark(url, pwd, title, ep){
+  // 方案 B：默认不再打开播放页，直接交给 mpv
+  if (window.__useWebPlayer !== true){
+    return playInMpv(url, pwd, title, ep);
+  }
   // 切片前清掉上一部片的所有延迟任务，避免它继续改界面（片名/时长乱跳）
   try {
     (window.__plTimers || []).forEach(function(t){ clearTimeout(t); });

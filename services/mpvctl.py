@@ -125,7 +125,7 @@ def _ensure_locked():
     if _proc is None or _proc.poll() is not None:
         args = [_MPV, "--no-config", "--idle=yes", "--force-window=no",
                 "--no-border", "--ontop", "--focus-on=never", "--keepaspect-window=no", "--hidpi-window-scale=no", 
-                "--keep-open=no", "--hwdec=auto-safe", "--osc=no",
+                "--keep-open=no", "--hwdec=auto-safe", "--osc=yes", "--osd-level=1", "--osd-duration=2000",
                 "--input-ipc-server=" + PIPE_NAME]
         _proc = subprocess.Popen(args, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL,
