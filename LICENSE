@@ -17,8 +17,8 @@ Copyright (c) 2026 Flixer
 
 - **任何形式的商业使用**：包括但不限于销售本软件、集成进付费产品、
   作为商业服务的组成部分、用于企业内部经营行为
-- **任何形式的盈利行为**：包括但不限于收费分发、插入广告、
-  以本软件引流变现、接受以本软件为对价的赞助或打赏
+- **任何形式的盈利行为**：包括但不限于收费分发、插入广告、以本软件引流变现
+  （使用者对作者的**自愿投喂**不属于此列，且不构成任何商业授权）
 - 将本软件或其衍生作品用于违反当地法律法规的用途
 - 移除或隐藏本许可与免责声明
 
@@ -50,9 +50,9 @@ monetized in any way**.
 - **Any commercial use**, including but not limited to selling the Software,
   bundling it into a paid product, embedding it in a commercial service, or
   using it in business operations
-- **Any monetization**, including but not limited to paid distribution,
-  advertising, traffic monetization, or accepting sponsorship/donations in
-  exchange for the Software
+- **Any monetization**, including but not limited to paid distribution, advertising or
+  traffic monetization (voluntary tips to the author are not in this category and
+  grant no commercial rights)
 - Any use that violates applicable laws or the terms of service of the
   underlying network-drive providers
 - Removing or hiding this license and disclaimer

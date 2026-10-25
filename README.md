@@ -3,8 +3,8 @@
 一个跑在自己电脑上的影视聚合站：**豆瓣/TMDB 选片 + 网盘搜索找源 + mpv 直接播放**。
 不搞盗链聚合站那套，也不做 CMS——只要「点一下就能看 4K」。
 
-> **本项目仅供个人学习与技术研究，绝不商用、绝不盈利。**
-> 不收费、不接广告、不接受打赏，也不提供任何形式的付费版本。
+> 本项目仅供个人学习与技术研究，**不售卖、不接广告、不做付费版**。
+> 如果它帮到了你，页尾有投喂入口（完全自愿，不影响任何功能）。
 
 - 前端：单文件 `static/index.html`（无框架、无构建）
 - 后端：Python（Flask + waitress），端口 `7100`
@@ -228,22 +228,35 @@ DTS / TrueHD                      四家全不支持 → 只能 mpv
 
 ---
 
-## 五、支持这个项目
+## 八、支持作者
 
-**本项目不接受任何形式的赞助、打赏或捐款**（不收款、不接广告、不做付费版）。
+这个项目花了很久。如果它帮到了你，**欢迎投喂作者**——完全自愿，不影响任何功能，
+也不构成任何商业授权。
 
-如果你希望它变得更好，这些是真正有用的：
+<table>
+<tr>
+<td align="center" width="50%">
+  <img src="docs/reward-wechat.jpg" width="260" alt="微信收款码"><br>
+  <b>微信支付</b>
+</td>
+<td align="center" width="50%">
+  <img src="docs/reward-alipay.jpg" width="260" alt="支付宝收款码"><br>
+  <b>支付宝</b>
+</td>
+</tr>
+</table>
 
-- 点一个 **Star**，让更多人看到
-- 遇到问题提 **Issue**（附上片名、现象、控制台报错）
-- 有好用的片源或插件，提 **Pull Request**
-- 把使用体验写下来（哪里慢、哪里卡、哪里看不懂），比打钱有用得多
+不投喂也完全没问题——**点个 Star、提个 Issue、把体验告诉我**，同样有用。
+
+---
 
 ## 六、免责声明
 
 本项目仅用于**个人学习与技术研究**，**绝不商用、绝不盈利**，不存储任何影视资源，
 所有内容均来自第三方公开分享链接。请勿将本项目用于任何商业或盈利目的。
 使用者需自行确保其行为符合当地法律法规与各网盘服务条款。因使用本工具产生的一切后果由使用者自行承担。
+
+如权利人认为内容侵权，请联系作者，**会立即删除相关内容**。
 
 ---
 
@@ -254,3 +267,94 @@ DTS / TrueHD                      四家全不支持 → 只能 mpv
 - [TMDB](https://www.themoviedb.org/) —— 影视元数据
 - 豆瓣 —— 榜单与中文资料
 - [Scrapling](https://github.com/D4Vinci/Scrapling) —— 反爬抓取兜底
+
+---
+
+# Flixer — English
+
+**One click from “I want to watch this in 4K” to actually watching it.**
+
+A self-hosted movie & series hub: browse with Douban / TMDB, find sources across netdisk search
+engines, and play through **mpv via a direct link**. Real 4K, real Dolby, instant seeking.
+
+> Personal study and research only. **Not sold, no ads, no paid tier.**
+> A voluntary tip jar sits at the bottom of this page; it changes nothing about the software.
+
+## 0. Three things you must have
+
+| Dependency | Purpose | How to get it |
+|---|---|---|
+| **TMDB API Key** | Titles, posters, overviews, discover filters | Register at <https://www.themoviedb.org> → Settings → API → free v3 key → `data/tmdb_key.txt` |
+| **mpv** | The actual player (web UI is only a remote) | Windows build from <https://mpv.io/installation/> → `bin/mpv/mpv.exe` |
+| **Quark cookie** | Resolving netdisk direct links | Log in at <https://pan.quark.cn> → F12 → Network → copy `Cookie` → `data/quark_cookie.json` |
+
+## 1. What problem it solves
+
+- **Aggregator sites** hand you transcoded 1080p — bitrate squeezed, audio dropped, "4K" is a label
+- **Netdisk players** want you to save the file first, then throttle you anyway
+- **Browser players** cannot decode Dolby, cannot switch tracks, and their progress bar flickers
+
+Flixer's answer: **let the professional player do the professional job.**
+Quark direct link → mpv hardware decoding → instant seek. The web UI only does what it is good at:
+finding, filtering, picking episodes, passing parameters.
+
+## 2. Netflix-grade ritual
+
+A deliberately restrained, Netflix-flavoured interface: an opening brand animation
+(logo fade-in → light bloom → hero rise) before the home page, a dark canvas with a single red accent,
+slow hover states, and **zero** promo popups. When you press play, the page steps aside — the picture
+belongs to mpv, not to a fake in-page player.
+
+> Principle: **less is premium.** Every animation must make the content stand out, or it gets deleted.
+
+## 3. Dirty problems already solved
+
+| Problem | Fix |
+|---|---|
+| Dead share links | Ask Quark per link (`41011` expired / `41012` revoked) instead of letting you click into nothing |
+| Decoy video track | Detect the fake "notice" track and pick the real one before playback starts |
+| Access codes | Parsed automatically from URL params and share titles |
+| Black screen with audio | GPU HEVC incompatibility → auto software decode, remembered per machine |
+| Filters | TMDB discover: "US + Comedy" no longer returns Chinese films |
+| Slow search | PanSou plugins are async → two-phase query (partial results first, refill after 4s) |
+| Scroll flicker | Fade-in only on first render, not on every page append |
+
+## 4. Stack & credits
+
+Python (Flask + waitress) · single-file frontend · mpv IPC · SQLite cache
+
+Built with [PanSou](https://github.com/fish2018/pansou), [mpv](https://mpv.io/),
+[FFmpeg](https://ffmpeg.org/), [TMDB](https://www.themoviedb.org/), Douban,
+[Scrapling](https://github.com/D4Vinci/Scrapling), [pansou.top](https://pansou.top/),
+[Motion One](https://motion.dev/).
+
+**Developed with [DSH (DeepSeek Harness)](https://github.com/deepseek-ai)** — requirement breakdown,
+implementation, packet-level debugging and acceptance testing all happened inside DSH sessions,
+backed by measured numbers.
+
+## 5. Known limitations
+
+- Quark only for playback
+- **DTS / TrueHD must go through mpv**
+- Multi-video-track files need mpv to choose the real track
+- pansou.top is third-party and may change or disappear
+- 4K HEVC may show a few seconds of black on unsupported GPUs
+- Episode playlist is appended in the background (40 episodes ≈ 15–30s)
+
+## 6. Support the author
+
+If this project helped you, **you are welcome to buy the author a coffee**. Completely voluntary —
+it unlocks nothing and is not a commercial license.
+
+| WeChat Pay | Alipay |
+|---|---|
+| <img src="docs/reward-wechat.jpg" width="220"> | <img src="docs/reward-alipay.jpg" width="220"> |
+
+A **Star**, an **Issue**, or honest feedback helps just as much.
+
+## 7. Disclaimer
+
+Personal study and research only. Not sold, no ads, no paid edition. No media is stored or hosted;
+everything comes from third-party public share links. You are responsible for complying with
+applicable laws and provider terms. If a rights holder believes content infringes,
+**contact the author and it will be removed immediately**.
