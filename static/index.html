@@ -3536,6 +3536,37 @@ async function playInMpv(url, pwd, title, ep){
   }
 }
 
+/* 电视剧选集弹窗（点播放后先选集） */
+function pickEpisode(eps, cur, title, onPick){
+  try {
+    const old = document.getElementById('epPick'); if (old) old.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'epPick';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.72);'
+      + 'display:grid;place-items:center';
+    let btns = '';
+    for (let i = 0; i < eps.length; i++){
+      const on = (i === cur);
+      btns += '<button data-i="' + i + '" style="height:38px;border-radius:5px;cursor:pointer;'
+        + 'border:1px solid ' + (on ? '#e50914' : '#2b2b2b') + ';background:' + (on ? '#e50914' : '#1b1b1b')
+        + ';color:#eee;font-size:13px;font-weight:600">' + (eps[i].ep || (i + 1)) + '</button>';
+    }
+    wrap.innerHTML = '<div style="width:min(680px,92vw);max-height:80vh;overflow:auto;background:#141414;'
+      + 'border-radius:10px;padding:22px 22px 18px;color:#eee;font:14px/1.6 system-ui,\'Microsoft YaHei\'">'
+      + '<div style="font-size:16px;font-weight:600;margin-bottom:4px">' + (title || '选集') + '</div>'
+      + '<div style="color:#8a8a8a;font-size:12.5px;margin-bottom:14px">共 ' + eps.length + ' 集，选一集开始播放</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px">' + btns + '</div>'
+      + '<div style="text-align:right;margin-top:16px"><button id="epCancel" style="background:none;border:1px solid #333;'
+      + 'color:#bbb;border-radius:5px;padding:7px 16px;cursor:pointer;font-size:13px">取消</button></div></div>';
+    document.body.appendChild(wrap);
+    wrap.querySelectorAll('button[data-i]').forEach(b => {
+      b.onclick = () => { const i = Number(b.dataset.i); wrap.remove(); onPick(i); };
+    });
+    wrap.querySelector('#epCancel').onclick = () => wrap.remove();
+    wrap.addEventListener('click', ev => { if (ev.target === wrap) wrap.remove(); });
+  } catch(e){ onPick(cur || 0); }
+}
+
 async function playInMpvInner(url, pwd, title, ep){
   const toast = (msg, ms) => {
     try {
@@ -3556,7 +3587,8 @@ async function playInMpvInner(url, pwd, title, ep){
     } catch(e){}
   };
 
-  toast('正在解析片源…', 8000);
+  const _showToast = toast;
+  _showToast('正在解析片源…', 20000);
   let d;
   try {
     const epQ = (ep !== undefined && ep !== null && ep !== '') ? ('&ep=' + encodeURIComponent(ep)) : '';
@@ -3573,6 +3605,17 @@ async function playInMpvInner(url, pwd, title, ep){
                   EMPTY_SHARE: '分享内容为空', NO_VIDEO: '这条分享里没有视频文件' };
     toast((map[d && d.code] || '播不了') + (d && d.error ? '：' + d.error : ''));
     return;
+  }
+
+  // 电视剧：先弹选集，选完再起 mpv
+  if ((d.episodes || []).length > 1 && (ep === undefined || ep === null || ep === '')){
+    try {
+      const t = document.getElementById('mpvToast'); if (t) t.remove();
+      pickEpisode(d.episodes, d.ep_index || 0, title || d.name, (i) => {
+        playInMpv(url, pwd, title, i);
+      });
+      return;
+    } catch(e){}
   }
 
   // 窗口：屏幕中央，16:9，约占可用区域 68%
