@@ -1771,7 +1771,7 @@ function srcRowHtml(r, unknownRes){
   if (q.subtitle) tags.push(`<span class="tag ok">${{embedded_bilingual:'内封双语',embedded_cn:'内嵌中文',external:'外挂字幕'}[q.subtitle]||q.subtitle}</span>`);
   if (q.size_gb) tags.push(`<span class="tag">${q.size_gb>=1?q.size_gb.toFixed(1)+' GB':(q.size_gb*1024).toFixed(0)+' MB'}</span>`);
   if (r.needs_offline) tags.push('<span class="tag no">磁力·需离线下载</span>');
-  if (r.audio_ok === false) tags.push('<span class="tag no">' + (r.audio_label || '杜比音轨') + '·无声</span>');
+  if (r.audio_label) tags.push('<span class="tag">' + r.audio_label + '</span>');   // 全 mpv 播放，音轨都能解，不再标无声
   else if (r.audio_ok === true && r.audio_label) tags.push('<span class="tag">' + r.audio_label + '</span>');
   if (r.live_state === 'ok') tags.push('<span class="tag ok">已验证可用</span>');
     if (r.live_state === 'pwd') tags.push('<span class="tag warn">需提取码</span>');
@@ -2425,7 +2425,7 @@ function astLabel(t){
 
 function astBad(codec){
   const c = String(codec||'').toUpperCase();
-  if (/EAC3|AC3|DTS|TRUEHD/.test(c)) return { bad: true, label: '杜比·无声音' };
+  if (/EAC3|AC3|DTS|TRUEHD/.test(c)) return { bad: false, label: (c || '').toUpperCase() };
   if (/AAC|MP3|OPUS|FLAC|PCM/.test(c)) return { bad: false, label: '可播放' };
   return { bad: false, label: '' };
 }
