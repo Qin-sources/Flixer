@@ -1656,6 +1656,15 @@ def api_cache_clear():
 
 
 
+def _ensure_pansou():
+    """启动时确保 PanSou 在跑（网盘搜索依赖它，没它只剩缓存）"""
+    try:
+        from services import pansou as PS
+        print('[pansou] started:', PS.ensure(wait=25), flush=True)
+    except Exception as e:
+        print('[pansou] start failed:', e, flush=True)
+
+
 def _prewarm_mpv():
     """后台预热 mpv，让第一次点播放也接近秒开"""
     try:
@@ -1671,6 +1680,7 @@ def _prewarm_mpv():
 try:
     import threading as _th
     _th.Thread(target=_prewarm_mpv, daemon=True).start()
+    threading.Thread(target=_ensure_pansou, daemon=True).start()
 except Exception:
     pass
 
