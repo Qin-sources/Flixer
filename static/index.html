@@ -3742,10 +3742,13 @@ if (window._preferWebPlayer !== true){
       }).catch(() => { window._mpvBusy = false; });
     };
     v.addEventListener('error', () => _fallback('浏览器解码失败'), { once: true });
+    // 兜底判定要保守：大文件（4K/HEVC）首帧可能要十几秒，
+    // 只有在「完全没有任何视频信息」时才认为原生失败，避免误起 mpv
     setTimeout(() => {
       if (!alive() || MPV.active || _fellBack) return;
-      if (v.readyState < 2 || !v.videoWidth) _fallback('画面一直没有出来');
-    }, 6000);
+      if (v.videoWidth || v.duration > 0 || v.currentTime > 0) return;
+      _fallback('画面一直没有出来');
+    }, 25000);
   }
 
   /* 静音状态同步（带图标反馈） */
