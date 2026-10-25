@@ -3812,7 +3812,7 @@ if (!_mpvOn){
       if (!alive() || MPV.active || _fellBack) return;
       if (v.videoWidth || v.duration > 0 || v.currentTime > 0) return;
       _fallback('画面一直没有出来');
-    }, 25000));
+    }, 8000));
   }
 
   // remux 流不支持 Range：拖动后从目标时间点重启
