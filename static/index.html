@@ -3314,7 +3314,12 @@ function mpvInstallProxy(v){
     try { Object.defineProperty(v, name, { configurable: true, enumerable: true, get: get, set: set }); }
     catch(e){}
   };
-  def('currentTime', () => MPV.time, (x) => {
+  def('currentTime', () => {
+    if (!MPV.active) return MPV.time;
+    if (MPV.paused || !MPV._at) return MPV.time;
+    const t = MPV.time + (performance.now() - MPV._at) / 1000;
+    return (MPV.duration > 0) ? Math.min(t, MPV.duration) : t;
+  }, (x) => {
     const t = Math.max(0, Number(x) || 0);
     MPV.time = t;
     mpvCmd('seek', t);
@@ -3344,8 +3349,12 @@ async function mpvPoll(){
       MPV.time = 0;
       return;
     }
-    MPV.time = Number(d.time) || 0;
-    MPV.duration = Number(d.duration) || 0;
+    const _srvT = Number(d.time) || 0;
+    const _srvD = Number(d.duration) || 0;
+    if (_srvD > 0) MPV.duration = _srvD;
+    // 本地插值：偏差小于 0.6 秒就不回拉，避免进度条来回跳
+    if (Math.abs(_srvT - MPV.time) > 0.6 || MPV.paused) MPV.time = _srvT;
+    MPV._at = performance.now();
     MPV.paused = !!d.pause;
     MPV.volume = Math.max(0, Math.min(1, (Number(d.volume) || 0) / 100));
     MPV.muted = !!d.mute;
@@ -4908,6 +4917,29 @@ document.addEventListener('keydown', function(e){
   };
   window.addEventListener('pagehide', bye);
   window.addEventListener('beforeunload', bye);
+})();
+
+/* mpv 模式：进度条平滑推进（避免 1 秒一跳的闪烁） */
+(function(){
+  var raf = null;
+  function tick(){
+    try {
+      if (typeof MPV !== 'undefined' && MPV.active){
+        if (!MPV.paused && MPV._at){
+          var dt = (performance.now() - MPV._at) / 1000;
+          var t = MPV.time + dt;
+          if (MPV.duration > 0 && t > MPV.duration) t = MPV.duration;
+          // 只更新界面，不回写 MPV.time（下一轮轮询会软校正）
+          var v = MPV.v;
+          if (v){
+            try { v.dispatchEvent(new CustomEvent('flx-tick', {detail: t})); } catch(e){}
+          }
+        }
+      }
+    } catch(e){}
+    raf = requestAnimationFrame(tick);
+  }
+  if (!raf) raf = requestAnimationFrame(tick);
 })();
 </script>
 </body>
