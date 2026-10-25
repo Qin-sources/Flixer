@@ -3722,9 +3722,9 @@ let _mpvOn = false;   // mpv 接管标记（B 方案）
     var _audioOk = _canPlayAudio(_ai.codec || _ai.raw_codec || '');
     var _videoOk = _codecs.length ? _canPlayVideo(_codecs[0]) : true;
     // 多视频轨（防和谐假轨）浏览器无法切轨 → 只能 mpv
-    var _needMpv = (!_audioOk) || (!_videoOk);
+    var _needMpv = (!_audioOk) || (!_videoOk) || (_tracks > 1);
     // 多视频轨（假轨）：不再交给 mpv，改用服务器换轨重封装后原生播放
-    var _remux = (_tracks > 1);
+    var _remux = false;   // 停用 remux：夸克内核会静默卡住
     if (_remux) _needMpv = false;
     try {
       if (window.__flxDiag) console.log('[flx] audio=' + (_ai.codec||'') + ' ok=' + _audioOk +
