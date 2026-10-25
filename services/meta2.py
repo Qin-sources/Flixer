@@ -17,7 +17,10 @@ import json
 import logging
 import time
 
+import re
 import requests
+
+CJK_RE = re.compile(r'[\u4e00-\u9fff]')
 
 from . import stealth as ST
 from .search import cache_get, cache_set
@@ -209,6 +212,12 @@ def _omdb(name, year=None):
         plot = (j.get("Plot") or "").strip()
         if j.get("Response") != "True" or not plot or plot == "N/A":
             return None
+        # 中文片名却返回纯西文片名 → 视为错配，拒绝（避免外国片海报顶替）
+        _nm0 = params.get('t') or ''
+        _ti0 = j.get('Title') or ''
+        if CJK_RE.search(_nm0) and not CJK_RE.search(_ti0):
+            return None
+
         return {"overview": plot, "poster": j.get("Poster") if j.get("Poster") != "N/A" else "",
                 "rating": None, "genres": [g.strip() for g in (j.get("Genre") or "").split(",") if g.strip()],
                 "source": "omdb", "title": j.get("Title")}
@@ -332,3 +341,22 @@ def get(title, year=None, is_tv=None, orig_title=None, douban_id=None):
     else:
         cache_set(ck + ":neg", {"t": int(time.time())})
     return out
+
+
+# ── OMDb 语言一致性校验（包装，不侵入原函数）────────────────
+import re as _re_c
+
+_CJK = _re_c.compile(r"[\u4e00-\u9fff]")
+_omdb_guarded = _omdb
+
+
+def _omdb(name, year=None):
+    d = _omdb_guarded(name, year)
+    if not d:
+        return None
+    req_cn = bool(_CJK.search(str(name or "")))
+    got_cn = bool(_CJK.search(str(d.get("title") or "")))
+    if req_cn and not got_cn:
+        log.info("OMDb 结果与中文片名不符，已丢弃: %s -> %s", name, d.get("title"))
+        return None
+    return d

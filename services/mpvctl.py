@@ -350,6 +350,12 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=
         pass
     _send({"command": ["set_property", "force-window", True]}, 1.0)
     _send({"command": ["set_property", "pause", False]}, 1.0)
+    # 这台机器以前硬解失败过 → 直接软解，避免每次黑屏等待
+    try:
+        if _hw_cache_read().get("no_hw"):
+            _send({"command": ["set_property", "hwdec", "no"]}, 1.0)
+    except Exception:
+        pass
     r = _send({"command": ["loadfile", url]}, 3.0)
     _fid = fid
     _cache["duration"] = 0.0
@@ -390,6 +396,27 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=
 
 
 
+
+
+_HW_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      "data", "mpv_hw.json")
+
+
+def _hw_cache_read():
+    try:
+        with open(_HW_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _hw_cache_write(obj):
+    try:
+        os.makedirs(os.path.dirname(_HW_FILE), exist_ok=True)
+        with open(_HW_FILE, "w", encoding="utf-8") as f:
+            json.dump(obj, f)
+    except Exception:
+        pass
 
 
 def _ensure_video(vid_hint=None, tries=60):
@@ -438,6 +465,13 @@ def _hw_watchdog(wait=6.0):
         if frames >= 5:
             return                       # 正常出帧，不用管
         pos = _get("time-pos", 0.6) or 0
+        try:
+            c = _hw_cache_read()
+            c["no_hw"] = True
+            c["reason"] = "hardware decode produced no frames"
+            _hw_cache_write(c)
+        except Exception:
+            pass
         _send({"command": ["set_property", "hwdec", "no"]}, 1.0)
         time.sleep(0.4)
         try:
