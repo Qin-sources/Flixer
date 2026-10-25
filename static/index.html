@@ -1565,6 +1565,11 @@ function backToMovieDetail(){
 }
 
 function closeDetail(fromPop){
+  // 关闭详情页时，把 mpv 的播放/选集提示条一并收起
+  try {
+    const t = document.getElementById('mpvToast');
+    if (t){ clearTimeout(t.__h); t.remove(); }
+  } catch(e){}
   const wrap = $('#detailWrap');
   const wasOpen = wrap && wrap.classList.contains('open');
   if (wasOpen){
