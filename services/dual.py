@@ -693,6 +693,38 @@ def dual_search(query, tmdb_meta, is_tv, max_wait=60, year_hint=None):  # noqa: 
                 have.add(u)
                 added += 1
             if added:
+                # 现场验活：新源默认 unknown，这里并发核一次真实状态
+                try:
+                    from concurrent.futures import ThreadPoolExecutor
+                    from . import quark as _QK
+
+                    pend = [r for r in res if r.get("source") == "pansou.top"
+                            and r.get("live_state") == "unknown"][:40]
+                    if pend:
+                        def _chk(r):
+                            try:
+                                return r, _QK.share_state(r.get("pan_url") or "")
+                            except Exception:
+                                return r, {}
+
+                        alive = []
+                        with ThreadPoolExecutor(max_workers=8) as ex:
+                            for r, sx in ex.map(_chk, pend):
+                                st = (sx or {}).get("state")
+                                if st == "dead":
+                                    r["live_state"] = "dead"
+                                    r["dead_reason"] = (sx or {}).get("message") or "分享已失效"
+                                    r["score"] = 0
+                                elif st == "ok":
+                                    r["live_state"] = "ok"
+                                elif st == "pwd":
+                                    r["live_state"] = "pwd"
+                                alive.append(r)
+                        res = [r for r in res
+                               if not (r.get("source") == "pansou.top"
+                                       and r.get("live_state") == "dead")]
+                except Exception:
+                    pass
                 res.sort(key=lambda x: x.get("score", 0), reverse=True)
                 out["resources"] = res
                 out.setdefault("sources", []).append("pansou.top:%d" % added)

@@ -1,0 +1,6 @@
+﻿flask
+waitress
+requests
+websocket-client
+beautifulsoup4
+lxml
