@@ -1585,9 +1585,12 @@ function closeDetail(fromPop){
     _detailFromQuery = null;
     _currentMovie = null;
     window.__restoreDetailScroll = true;
-    // 筛选页：不重新拉取/重绘（否则会闪、会跳回顶部、滚动进度丢失）
+    // 筛选页：用快照原样还原（不请求、不重绘、不回顶部）
     if (v === 'filter'){
       try { if (typeof setTab === 'function') setTab('filter'); } catch(e){}
+      if (!_fvSnapRestore()){
+        try { window.scrollTo(0, window.__detailScroll || 0); } catch(e){}
+      }
     } else {
       restoreView(v, q);
     }
@@ -4313,6 +4316,7 @@ function frowHtml(label, items, key){
 
 async function openFilter(media){
   if (media) FSTATE.media = media;
+  if (!FSTATE.mtype || FSTATE.mtype === '') FSTATE.mtype = '电影';
   FSTATE.page = 0;
   stopHeroTimer();
   setTab(media === 'tv' ? 'tv' : (media === 'movie' ? 'movie' : 'filter'));
@@ -4378,6 +4382,44 @@ function fSelText(){
   return parts.length ? parts.join(' · ') : '全部影片';
 }
 
+
+/* 筛选页快照：打开详情前存，关闭时原样还原（不重绘） */
+function _fvSnapSave(){
+  try {
+    const g = document.getElementById('fvGrid');
+    if (!g) return false;
+    window.__fvSnap = {
+      html: g.innerHTML,
+      y: window.scrollY || 0,
+      page: FSTATE.page,
+      total: FSTATE.totalPages || 1,
+      media: FSTATE.mtype, region: FSTATE.region, genre: FSTATE.genre, sort: FSTATE.sort
+    };
+    return true;
+  } catch(e){ return false; }
+}
+function _fvSnapRestore(){
+  const s = window.__fvSnap;
+  if (!s) return false;
+  try {
+    const g = document.getElementById('fvGrid');
+    if (!g) return false;
+    if (g.innerHTML !== s.html) g.innerHTML = s.html;
+    FSTATE.page = s.page;
+    FSTATE.totalPages = s.total;
+    FSTATE.mtype = s.media; FSTATE.region = s.region;
+    FSTATE.genre = s.genre; FSTATE.sort = s.sort;
+    // 重新绑卡片点击
+    document.querySelectorAll('#fvGrid .card').forEach(c => {
+      c.onclick = () => openMovieDetail(_mdItemFromCard(c));
+    });
+    window.scrollTo(0, s.y);
+    setTimeout(() => { try { window.scrollTo(0, s.y); } catch(e){} }, 60);
+    window.__fvSnap = null;
+    return true;
+  } catch(e){ return false; }
+}
+
 async function runFilter(reset){
   const g = $('#fvGrid'), cnt = $('#fvCount'), sel = $('#fvSel'), more = $('#fvMore');
   if (!g) return;
@@ -4411,7 +4453,7 @@ async function runFilter(reset){
     else g.insertAdjacentHTML('beforeend', html);
 
     // 卡片点击 —— 和首页保持一致
-    $$('.card').forEach(c => { c.onclick = () => openMovieDetail(_mdItemFromCard(c)); });
+    $$('.card').forEach(c => { c.onclick = () => { _fvSnapSave(); openMovieDetail(_mdItemFromCard(c)); }; });
     if (window.Motion) Motion.animate(g, {opacity:[0,1]}, {duration:.3});
 
     if (more){
