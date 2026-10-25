@@ -1586,7 +1586,9 @@ function closeDetail(fromPop){
     _currentMovie = null;
     window.__restoreDetailScroll = true;
     // 筛选页：用快照原样还原（不请求、不重绘、不回顶部）
-    if (v === 'filter'){
+    // 只要当前是筛选页（有 #fvGrid）就走快照还原，不看视图名
+    const _isFv = (v === 'filter') || !!document.getElementById('fvGrid');
+    if (_isFv){
       try { if (typeof setTab === 'function') setTab('filter'); } catch(e){}
       if (!_fvSnapRestore()){
         try { window.scrollTo(0, window.__detailScroll || 0); } catch(e){}

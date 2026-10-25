@@ -113,6 +113,37 @@ def _get(prop, timeout=0.6):
     return None
 
 
+
+
+def _kill_strays():
+    """清掉不属于当前会话的 mpv 进程，避免播放进不可见的旧实例"""
+    try:
+        keep = None
+        try:
+            if _proc is not None and _proc.poll() is None:
+                keep = _proc.pid
+        except Exception:
+            keep = None
+        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq mpv.exe", "/FO", "CSV", "/NH"],
+                             capture_output=True, text=True, encoding="gbk", errors="ignore").stdout
+        killed = []
+        for line in (out or "").strip().split("\n"):
+            parts = [x.strip().strip('"') for x in line.split('","')]
+            if len(parts) < 2 or parts[0].lower() != "mpv.exe":
+                continue
+            try:
+                pid = int(parts[1])
+            except Exception:
+                continue
+            if keep is not None and pid == keep:
+                continue
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+            killed.append(pid)
+        return killed
+    except Exception:
+        return []
+
+
 def _ensure():
     with _io_lock:
         return _ensure_locked()
@@ -320,6 +351,11 @@ def fit(x, y, w, h):
 
 
 def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=None):
+    # 单实例守卫：先把残留的 mpv 都清掉（否则可能播进看不见的旧窗口）
+    try:
+        _kill_strays()
+    except Exception:
+        pass
     _touch()
     global _fid
     _ensure()
