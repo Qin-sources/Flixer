@@ -661,3 +661,41 @@ def dual_search(query, tmdb_meta, is_tv, max_wait=60, year_hint=None):
         except Exception:
             pass
     return payload
+
+
+# ── 追加 pansou.top 源（纯 HTTP，SSE + 解密）──────────────────────
+_dual_orig = dual_search
+
+
+def dual_search(query, tmdb_meta, is_tv, max_wait=60, year_hint=None):  # noqa: F811
+    out = _dual_orig(query, tmdb_meta, is_tv, max_wait=max_wait, year_hint=year_hint)
+    try:
+        from . import ptsou as _PTS
+        extra = _PTS.locate(query, limit=25)
+        if extra and isinstance(out, dict):
+            res = out.get("resources") or []
+            have = {str(r.get("pan_url") or "") for r in res}
+            added = 0
+            for it in extra:
+                u = str(it.get("url") or "")
+                if not u or u in have:
+                    continue
+                res.append({
+                    "title": it.get("title") or "",
+                    "pan_type": "quark",
+                    "pan_url": u,
+                    "passcode": it.get("passcode") or "",
+                    "score": 95,
+                    "source": "pansou.top",
+                    "live_state": "unknown",
+                    "verified": None,
+                })
+                have.add(u)
+                added += 1
+            if added:
+                res.sort(key=lambda x: x.get("score", 0), reverse=True)
+                out["resources"] = res
+                out.setdefault("sources", []).append("pansou.top:%d" % added)
+    except Exception:
+        pass
+    return out
