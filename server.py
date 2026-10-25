@@ -448,7 +448,8 @@ def api_open_mpv():
     # 复用带 IPC 的实例，避免出现两个窗口
     from services import mpvctl as MPV
     try:
-        MPV.play(url, title, max(0, x), max(0, y), w, h, fid, headers=headers)
+        MPV.play(url, title, max(0, x), max(0, y), w, h, fid, headers=headers,
+                 vid_hint=(int(float(request.args.get("v"))) + 1 if request.args.get("v") not in (None, "") else None))
     except Exception as ex:
         return err("启动 mpv 失败: %s" % ex, 500)
     return ok({"opened": True, "player": exe, "url": url,

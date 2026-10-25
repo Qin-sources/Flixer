@@ -319,7 +319,7 @@ def fit(x, y, w, h):
     return _fit_window(int(x), int(y), int(w), int(h))
 
 
-def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None):
+def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None, vid_hint=None):
     _touch()
     global _fid
     _ensure()
@@ -370,9 +370,12 @@ def play(url, title="", x=0, y=0, w=1280, h=720, fid="", headers=None):
         pass
 
     # 有些文件加载后会停在暂停态，这里再确保一次在播
-    # 选好正片轨再打开视频输出并播放：全程不渲染假轨
+    # 有 hint 时 mpv 已经按正确轨加载，只做一次轻量校验，不再长时间等待
     try:
-        _apply_video_track(tries=25)
+        if vid_hint:
+            _apply_video_track(tries=4)
+        else:
+            _apply_video_track(tries=25)
     except Exception:
         pass
     _send({"command": ["set_property", "force-window", True]}, 1.0)

@@ -3629,8 +3629,24 @@ async function playInMpvInner(url, pwd, title, ep){
   } catch(e){ rect = { x: 200, y: 120, w: 1100, h: 620 }; }
 
   try {
+    // 算正片轨：只在真视频编码里挑分辨率最大的（排除 mjpeg 封面）
+    let _vidx = 0;
+    try {
+      const vi = d.video_info || {};
+      const codecs = vi.codecs || [], sizes = vi.sizes || [];
+      const real = (c) => /^(hevc|h264|avc1|av1|vp8|vp9|mpeg4)$/i.test(String(c || ''));
+      let best = -1;
+      for (let i = 0; i < Math.max(codecs.length, 1); i++){
+        if (codecs.length && !real(codecs[i])) continue;
+        const s2 = sizes[i] || [0, 0];
+        const area = (s2[0] || 0) * (s2[1] || 0);
+        if (area > best){ best = area; _vidx = i; }
+      }
+      if (best < 0) _vidx = 0;
+    } catch(e){}
+
     const q = new URLSearchParams({ fid: d.fid, title: title || d.name || '',
-      x: rect.x, y: rect.y, w: rect.w, h: rect.h, direct: 1 });
+      x: rect.x, y: rect.y, w: rect.w, h: rect.h, direct: 1, v: _vidx });
     const r = await (await fetch('/api/mpv/play?' + q.toString(), { method: 'POST' })).json();
     if (!r || !r.ok){ toast('启动 mpv 失败：' + ((r && r.error) || '')); return; }
   } catch(e){ toast('启动 mpv 失败：' + (e.message || '')); return; }
