@@ -533,7 +533,8 @@ def status():
         pass
     file_loaded = False
     try:
-        file_loaded = bool(_get("file-loaded", 0.4))
+        pth = _get("path", 0.4)
+        file_loaded = bool(pth) or bool(_get("duration", 0.3))
     except Exception:
         pass
     idle = False
