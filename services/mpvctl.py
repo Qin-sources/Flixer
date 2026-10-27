@@ -16,6 +16,7 @@ _req = {"id": 0}
 _io_lock = threading.RLock()
 _fid = ""
 _last_seen = {"t": 0.0}
+_progress = {"t": 0.0, "pos": -1.0}
 _wd_started = {"v": False}
 _cache = {"duration": 0.0, "volume": 100.0, "mute": False, "pause": False,
           "video_w": 0, "video_h": 0,
@@ -318,7 +319,12 @@ def _touch():
 
 
 def _watchdog():
-    """页面长时间没有心跳 → 关掉 mpv（浏览器被关/崩溃时兜底）"""
+    """只在「确实没在播放」且很久没心跳时才关 mpv
+
+    不自己查 mpv（会和 status 抢命名管道），只看 status 留下的进度记录：
+      · 最近 15 秒内进度推进过 → 在播 → 绝不退出
+      · 没在播 且 120 秒没心跳 → 浏览器确实没了 → 关掉
+    """
     while True:
         try:
             time.sleep(5)
@@ -326,7 +332,12 @@ def _watchdog():
                 continue
             if not _last_seen["t"]:
                 continue
-            if time.time() - _last_seen["t"] > 20:
+
+            playing_recently = (time.time() - (_progress["t"] or 0)) < 15
+            if playing_recently:
+                continue
+
+            if time.time() - _last_seen["t"] > 120:
                 quit_player()
         except Exception:
             pass
@@ -586,6 +597,14 @@ def status():
         if dv and float(dv) > 1:
             _cache["duration"] = float(dv)
     t = _get("time-pos", 0.6)
+    try:
+        if t is not None:
+            pos = float(t)
+            if _progress["pos"] >= 0 and pos > _progress["pos"] + 0.3:
+                _progress["t"] = time.time()      # 记录"最近一次确认在播"的时间
+            _progress["pos"] = pos
+    except Exception:
+        pass
     if _poll_n["n"] % 3 == 0:
         pv = _get("pause", 0.5)
         if pv is not None:

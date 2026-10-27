@@ -3579,9 +3579,9 @@ function _canPlayVideo(codec){
 }
 
 /* 统一走 mpv：解析片源 → 起 mpv → 轻提示（不打开播放页） */
-async function playInMpv(url, pwd, title, ep){
+async function playInMpv(url, pwd, title, ep, fid){
   try {
-    return await playInMpvInner(url, pwd, title, ep);
+    return await playInMpvInner(url, pwd, title, ep, fid);
   } catch(e){
     try {
       let t = document.getElementById('mpvToast');
@@ -3599,38 +3599,105 @@ async function playInMpv(url, pwd, title, ep){
   }
 }
 
-/* 电视剧选集弹窗（点播放后先选集） */
-function pickEpisode(eps, cur, title, onPick){
-  try {
-    const old = document.getElementById('epPick'); if (old) old.remove();
-    const wrap = document.createElement('div');
-    wrap.id = 'epPick';
-    wrap.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.72);'
-      + 'display:grid;place-items:center';
-    let btns = '';
-    for (let i = 0; i < eps.length; i++){
-      const on = (i === cur);
-      btns += '<button data-i="' + i + '" style="height:38px;border-radius:5px;cursor:pointer;'
-        + 'border:1px solid ' + (on ? '#e50914' : '#2b2b2b') + ';background:' + (on ? '#e50914' : '#1b1b1b')
-        + ';color:#eee;font-size:13px;font-weight:600">' + (eps[i].ep || (i + 1)) + '</button>';
-    }
-    wrap.innerHTML = '<div style="width:min(680px,92vw);max-height:80vh;overflow:auto;background:#141414;'
-      + 'border-radius:10px;padding:22px 22px 18px;color:#eee;font:14px/1.6 system-ui,\'Microsoft YaHei\'">'
-      + '<div style="font-size:16px;font-weight:600;margin-bottom:4px">' + (title || '选集') + '</div>'
-      + '<div style="color:#8a8a8a;font-size:12.5px;margin-bottom:14px">共 ' + eps.length + ' 集，选一集开始播放</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px">' + btns + '</div>'
-      + '<div style="text-align:right;margin-top:16px"><button id="epCancel" style="background:none;border:1px solid #333;'
-      + 'color:#bbb;border-radius:5px;padding:7px 16px;cursor:pointer;font-size:13px">取消</button></div></div>';
-    document.body.appendChild(wrap);
-    wrap.querySelectorAll('button[data-i]').forEach(b => {
-      b.onclick = () => { const i = Number(b.dataset.i); wrap.remove(); onPick(i); };
-    });
-    wrap.querySelector('#epCancel').onclick = () => wrap.remove();
-    wrap.addEventListener('click', ev => { if (ev.target === wrap) wrap.remove(); });
-  } catch(e){ onPick(cur || 0); }
+/* HTML 转义（选集弹窗等处需要） */
+function _esc(v){
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-async function playInMpvInner(url, pwd, title, ep){
+/* 选集弹窗：分组树 + 每集名字（复刻网盘目录） */
+function _cleanName(n){
+  var t = String(n || '');
+  t = t.replace(/\.(mp4|mkv|ts|flv|avi|mov|m4v|webm|rmvb|wmv)$/i, '');
+  t = t.replace(/_?\s*更多资源[:：].*$/i, '');
+  t = t.replace(/[，,]?\s*公众号[:：].*$/i, '');
+  t = t.replace(/[（(]\s*\d{3,4}p\s*[）)]/gi, '');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t || String(n || '');
+}
+function _fmtSize(b){
+  b = Number(b) || 0;
+  if (!b) return '';
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + 'G';
+  return Math.round(b / 1048576) + 'M';
+}
+function pickEpisode(groups, title, onPick){
+  try {
+    var old = document.getElementById('epPick'); if (old) old.remove();
+    if (!groups || !groups.length) return false;
+    var wrap = document.createElement('div');
+    wrap.id = 'epPick';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.78);'
+      + 'display:grid;place-items:center';
+    var tabs = '';
+    for (var g = 0; g < groups.length; g++){
+      var on0 = (g === 0);
+      tabs += '<button data-g="' + g + '" class="epTab" style="padding:7px 14px;border-radius:6px;'
+        + 'cursor:pointer;font-size:13px;white-space:nowrap;border:1px solid '
+        + (on0 ? '#e50914' : '#2b2b2b') + ';background:' + (on0 ? '#e50914' : '#1b1b1b')
+        + ';color:#eee">' + _esc(groups[g].name) + ' <span style="color:#cfcfcf;font-size:11px">'
+        + groups[g].count + '</span></button>';
+    }
+    wrap.innerHTML = '<div style="width:min(780px,94vw);max-height:84vh;display:flex;flex-direction:column;'
+      + 'background:#141414;border-radius:10px;padding:20px 20px 14px;color:#eee;'
+      + 'font:14px/1.6 system-ui,\'Microsoft YaHei\'">'
+      + '<div style="font-size:16px;font-weight:600;margin-bottom:10px">' + _esc(title || '选集') + '</div>'
+      + '<div id="epTabs" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;flex:0 0 auto">'
+      + tabs + '</div>'
+      + '<div id="epList" style="overflow:auto;flex:1 1 auto;margin-top:6px"></div>'
+      + '<div style="text-align:right;margin-top:12px;flex:0 0 auto">'
+      + '<button id="epCancel" style="background:none;border:1px solid #333;color:#bbb;'
+      + 'border-radius:5px;padding:7px 16px;cursor:pointer;font-size:13px">取消</button></div></div>';
+    document.body.appendChild(wrap);
+
+    var listEl = wrap.querySelector('#epList');
+    function renderGroup(gi){
+      var g = groups[gi];
+      var html = '';
+      for (var i = 0; i < g.items.length; i++){
+        var it = g.items[i];
+        var nm = _cleanName(it.name);
+        var sz = _fmtSize(it.size);
+        html += '<div class="epRow" data-fid="' + _esc(it.fid || '') + '" style="display:flex;'
+          + 'align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer">'
+          + '<span style="color:#7a7a7a;font-size:12px;min-width:34px;text-align:right">' + (i + 1) + '</span>'
+          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          + _esc(nm) + '</span>'
+          + (sz ? '<span style="color:#7a7a7a;font-size:12px;min-width:52px;text-align:right">' + sz + '</span>' : '')
+          + '</div>';
+      }
+      listEl.innerHTML = html;
+      Array.prototype.forEach.call(listEl.querySelectorAll('.epRow'), function(row){
+        row.onmouseenter = function(){ row.style.background = '#232323'; };
+        row.onmouseleave = function(){ row.style.background = 'transparent'; };
+        row.onclick = function(){
+          var fid = row.getAttribute('data-fid');
+          wrap.remove();
+          onPick({ fid: fid, group: g.name });
+        };
+      });
+    }
+    Array.prototype.forEach.call(wrap.querySelectorAll('.epTab'), function(b){
+      b.onclick = function(){
+        Array.prototype.forEach.call(wrap.querySelectorAll('.epTab'), function(x){
+          x.style.background = '#1b1b1b'; x.style.borderColor = '#2b2b2b';
+        });
+        b.style.background = '#e50914'; b.style.borderColor = '#e50914';
+        renderGroup(Number(b.getAttribute('data-g')));
+      };
+    });
+    renderGroup(0);
+    wrap.querySelector('#epCancel').onclick = function(){ wrap.remove(); };
+    wrap.addEventListener('click', function(ev){ if (ev.target === wrap) wrap.remove(); });
+    return true;
+  } catch(e){
+    try { console.log('[epPick]', e); } catch(_){}
+    return false;
+  }
+}
+
+async function playInMpvInner(url, pwd, title, ep, fid){
   const toast = (msg, ms) => {
     try {
       let t = document.getElementById('mpvToast');
@@ -3655,9 +3722,11 @@ async function playInMpvInner(url, pwd, title, ep){
   let d;
   try {
     const epQ = (ep !== undefined && ep !== null && ep !== '') ? ('&ep=' + encodeURIComponent(ep)) : '';
-    const j = await (await fetch('/api/play?share=' + encodeURIComponent(url)
+    const _url = '/api/play?share=' + encodeURIComponent(url)
       + (pwd ? '&pwd=' + encodeURIComponent(pwd) : '')
-      + '&title=' + encodeURIComponent(title || '') + epQ)).json();
+      + '&title=' + encodeURIComponent(title || '') + epQ
+      + (fid ? '&fid=' + encodeURIComponent(fid) : '');
+    const j = await (await fetch(_url)).json();
     d = j.data || j;
   } catch(e){
     toast('解析失败：' + (e.message || '网络错误'));
@@ -3671,13 +3740,14 @@ async function playInMpvInner(url, pwd, title, ep){
   }
 
   // 电视剧：先弹选集，选完再起 mpv
-  if ((d.episodes || []).length > 1 && (ep === undefined || ep === null || ep === '')){
+  if (((d.groups || []).length > 1 || (d.episodes || []).length > 1)
+      && (ep === undefined || ep === null || ep === '') && !fid){
     try {
       const t = document.getElementById('mpvToast'); if (t) t.remove();
-      pickEpisode(d.episodes, d.ep_index || 0, title || d.name, (i) => {
-        playInMpv(url, pwd, title, i);
+      const _ok = pickEpisode(d.groups || [], title || d.name, (pick) => {
+        playInMpv(url, pwd, title, '', pick && pick.fid);
       });
-      return;
+      if (_ok) return;
     } catch(e){}
   }
 

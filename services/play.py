@@ -248,17 +248,74 @@ def _find_subs(pwd_id, stoken, items, max_scan=120):
     return out
 
 
-def _find_videos(pwd_id, stoken, items, max_scan=80):
-    out, queue, scanned = [], [(it, 0) for it in items], 0
-    while queue and scanned < max_scan:
-        it, depth = queue.pop(0)
-        scanned += 1
-        if it.get("dir"):
-            if depth < 3:
-                queue.extend((s, depth + 1) for s in _list(pwd_id, stoken, it["fid"]))
-        elif (it.get("file_name") or "").lower().endswith(VIDEO_EXT):
+def _find_videos(pwd_id, stoken, items, max_dirs=80, max_files=4000):
+    """展开目录，返回 (videos, groups)
+
+    关键：名额只算「目录」，文件不占名额。
+    否则大合集（9季+剧场版共 290+ 文件）会在中途就停，后面的季全丢。
+    并发展开，避免逐层串行导致 18 秒的等待。
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    out = []
+    buckets = {}
+    order = []
+    root_items = [it for it in items]
+
+    def _bucket(path):
+        if path not in buckets:
+            buckets[path] = {"name": (path.split("/")[-1] if path else ""), "items": []}
+            order.append(path)
+        return buckets[path]
+
+    # 第一层：根目录直接的文件
+    for it in root_items:
+        if not it.get("dir") and (it.get("file_name") or "").lower().endswith(VIDEO_EXT):
             out.append(it)
-    return out
+            _bucket("")["items"].append(it)
+
+    dirs = []           # (fid, depth, prefix)
+    for it in root_items:
+        if it.get("dir"):
+            dirs.append((it["fid"], 1, it.get("file_name") or it.get("name") or ""))
+
+    dir_count = 0
+    while dirs and dir_count < max_dirs:
+        batch = dirs[:max_dirs - dir_count]
+        dirs = dirs[len(batch):]
+        dir_count += len(batch)
+
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            results = list(ex.map(lambda d: _list(pwd_id, stoken, d[0]), batch))
+
+        for (fid, depth, prefix), children in zip(batch, results):
+            for it in (children or []):
+                if it.get("dir"):
+                    if depth < 4:
+                        dirs.append((it["fid"], depth + 1,
+                                     prefix + "/" + (it.get("file_name") or it.get("name") or "")))
+                    continue
+                nm = it.get("file_name") or ""
+                if not nm.lower().endswith(VIDEO_EXT):
+                    continue
+                out.append(it)
+                _bucket(prefix)["items"].append(it)
+                if len(out) >= max_files:
+                    break
+
+    groups = []
+    for path in order:
+        b = buckets[path]
+        if not b["items"]:
+            continue
+        if not b["name"]:
+            b["name"] = "全部文件"
+        try:
+            b["items"].sort(key=lambda x: _nat_key(x.get("file_name") or ""))
+        except Exception:
+            pass
+        groups.append(b)
+    return out, groups
 
 
 # 浏览器原生尝试的容器（实测 Chrome 可直读 mkv 内的 HEVC / H264）
@@ -339,6 +396,29 @@ def _quality_rank(v):
     except Exception:
         size = 0
     return (q, size)
+
+
+def _build_groups(groups, vsorted=None):
+    """把目录分组直接映射给前端（不再经过 vsorted 去重，点哪个文件播哪个）"""
+    try:
+        out = []
+        for g in (groups or []):
+            items = []
+            for it in (g.get("items") or []):
+                items.append({
+                    "fid": it.get("fid"),
+                    "name": it.get("file_name") or it.get("name") or "",
+                    "size": it.get("size") or 0,
+                })
+            if items:
+                out.append({"name": g.get("name") or "全部文件",
+                            "count": len(items), "items": items})
+        # 单组且只有 1 个文件时不显示分组（电影）
+        if len(out) == 1 and out[0]["count"] <= 1:
+            return []
+        return out
+    except Exception:
+        return []
 
 
 def _sort_episodes(videos):
@@ -545,7 +625,7 @@ def check_share(share_url, passcode=""):
     return {"ok": True, "alive": False, "error": msg or ("code %s" % code)}
 
 
-def resolve(share_url, passcode="", want_title="", ep=None):
+def resolve(share_url, passcode="", want_title="", ep=None, want_fid=None):
     """
     解析分享 -> 转存 -> 出直链
     每一步失败都返回可读的错误，不再让「stoken 找不到」这种底层异常透出去
@@ -567,7 +647,7 @@ def resolve(share_url, passcode="", want_title="", ep=None):
     if not items:
         return _err("EMPTY_SHARE", "分享内容为空（可能已删除）")
 
-    videos = _find_videos(pwd_id, st, items)
+    videos, _groups = _find_videos(pwd_id, st, items)
     if not videos:
         return {"ok": False, "code": "NO_VIDEO", "error": "这个分享里没有视频文件"}
 
@@ -595,6 +675,20 @@ def resolve(share_url, passcode="", want_title="", ep=None):
                 if key in re.sub(r"[^\w\u4e00-\u9fa5]", "", v.get("file_name") or ""):
                     target = v
                     ep_index = i
+                    break
+
+    # ②b 直接指定了文件 fid（点目录里的某一个文件）
+    if target is None and want_fid:
+        for i, v in enumerate(vsorted):
+            if str(v.get("fid")) == str(want_fid):
+                target = v
+                ep_index = i
+                break
+        if target is None:
+            for v in videos:
+                if str(v.get("fid")) == str(want_fid):
+                    target = v
+                    ep_index = 0
                     break
 
     # ③ 默认：只有一集就直接用；多集取第一集（不再是"最大的那个"）
@@ -687,6 +781,7 @@ def resolve(share_url, passcode="", want_title="", ep=None):
             {"i": e["i"], "ep": e.get("ep"), "name": e["name"], "size": e["size"]}
             for e in episodes
         ] if len(episodes) > 1 else [],
+        "groups": _build_groups(_groups, vsorted),
         "ep_count": len(episodes),
         "subs": subs_out,
         "warn": ("%s 容器浏览器通常解不了，可能需要外部播放器"

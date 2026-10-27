@@ -1507,10 +1507,11 @@ def api_play():
     title = request.args.get("title") or ""
     pwd = request.args.get("pwd") or ""
     ep = request.args.get("ep")          # 第几集（0 基），不传则自动
+    want_fid = request.args.get("fid") or ""   # 直接指定文件（网盘目录里点哪条播哪条）
     if not share:
         return err("缺少 share 参数", 400)
     try:
-        r = PL.resolve(share, pwd, title, ep=ep)
+        r = PL.resolve(share, pwd, title, ep=ep, want_fid=want_fid)
         return jsonify({"ok": True, "data": r})
     except Exception as e:
         traceback.print_exc()
