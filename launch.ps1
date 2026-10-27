@@ -1,6 +1,8 @@
 ﻿# Flixer 启动器（带日志，便于排查）
+# 路径自适应：放在哪个目录就启动哪个目录的项目，克隆到别处也能直接用
 $ErrorActionPreference = 'SilentlyContinue'
-$root = 'F:\新建文件夹\Flixer'
+$root = $PSScriptRoot
+if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $port = 7100
 $log = Join-Path $root 'launch.log'
 
@@ -13,7 +15,7 @@ function Test-Port {
     return [bool](Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
 }
 
-Write-Log '--- 启动请求 ---'
+Write-Log "--- 启动请求（$root）---"
 
 if (-not (Test-Port)) {
     Write-Log '服务未运行，开始启动 python server.py'

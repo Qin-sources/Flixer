@@ -13,6 +13,7 @@
 - 前端：单文件 `static/index.html`（无框架、无构建）
 - 后端：Python（Flask + waitress），端口 `7100`
 - 播放：本机 **mpv**（网页只做选片与传参，画面全在 mpv 里）
+- 选集：**复刻网盘目录**——大合集（如 1-9 季 + 剧场版）按原目录分组，每集显示真实名字与大小，点哪个文件就播哪个
 - 片源：`pansou.top`（SSE 接口）+ 本地 PanSou 插件聚合
 - 元数据：TMDB → 豆瓣 → OMDb/TVmaze → showpaw
 
