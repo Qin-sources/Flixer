@@ -36,3 +36,6 @@ _flk/
 _edge_install.*
 _mockup_player.html
 
+
+_*.ps1
+
