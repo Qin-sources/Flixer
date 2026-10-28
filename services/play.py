@@ -10,6 +10,8 @@
 
 注意：直链签名绑定领取时的 cookie，代理时必须原样带上，否则 412。
 """
+import io
+import os
 import json
 import re
 import time
@@ -210,6 +212,189 @@ def cache_stats():
             pass
     return {"exists": True, "dir_fid": pdir, "count": n, "bytes": total,
             "gb": round(total / (1024 ** 3), 2)}
+
+
+def _cache_policy():
+    """读缓存策略：data/cache_policy.json -> {"keep": 3}"""
+    try:
+        import os
+        import json as _json
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "data", "cache_policy.json")
+        if os.path.exists(path):
+            with io.open(path, encoding="utf-8") as f:
+                d = _json.load(f)
+            keep = int(d.get("keep", 1))
+            return max(0, min(keep, 50))
+    except Exception:
+        pass
+    return 1
+
+
+def _wait_task(task_id, timeout=40):
+    """等夸克异步任务完成，返回是否成功"""
+    if not task_id:
+        return False
+    for _ in range(timeout):
+        time.sleep(1)
+        try:
+            c, r = _get("/task", {"task_id": task_id, "retry_index": 0})
+            if (r.get("data") or {}).get("status") == 2:
+                return True
+            if (r.get("code") or 0) not in (0, None):
+                return False
+        except Exception:
+            pass
+    return False
+
+
+def _delete_items(items, pdir, batch=30):
+    """删除指定条目（用 current_dir_fid + filelist，夸克要求文件名而非 fid）"""
+    if not items or not pdir:
+        return 0
+    done = 0
+    items = list(items)
+    for i in range(0, len(items), batch):
+        chunk = items[i:i + batch]
+        names = [(it.get("file_name") or it.get("name") or "").strip() for it in chunk]
+        names = [n for n in names if n]
+        if not names:
+            continue
+        try:
+            c, d = _post("/file/delete", {
+                "current_dir_fid": pdir,
+                "fids": [it.get("fid") for it in chunk],
+                "exclude_fids": [],
+            })
+            if (d.get("code") or 0) != 0:
+                print("[cache]   删除被拒: code=%s %s"
+                      % (d.get("code"), (d.get("message") or "")[:60]), flush=True)
+                continue
+            task = (d.get("data") or {}).get("task_id")
+            _wait_task(task, timeout=max(20, len(chunk)))
+            done += len(names)
+        except Exception as e:
+            print("[cache]   删除异常:", str(e)[:80], flush=True)
+    return done
+
+
+def _delete_fids(fids, batch=30):
+    """兼容旧调用：按 fid 找不到目录名时直接返回 0（请改用 _delete_items）"""
+    return 0
+
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_LAST_JSON = os.path.join(_ROOT, "data", "last_play.json")
+
+
+def remember_last(name, size=0, fid=""):
+    """记录最后播放的文件（退出清理时按 fid 精确保留）"""
+    try:
+        os.makedirs(os.path.dirname(_LAST_JSON), exist_ok=True)
+        with io.open(_LAST_JSON, "w", encoding="utf-8") as f:
+            json.dump({"name": name or "", "size": size or 0, "fid": fid or "",
+                       "at": time.strftime("%Y-%m-%d %H:%M:%S")}, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def prune_on_exit():
+    """退出时清理：只保留最后播放的那一部，其余删干净（分批+复核）"""
+    try:
+        keep_name = ""
+        keep_fid_hint = ""
+        if os.path.exists(_LAST_JSON):
+            with io.open(_LAST_JSON, encoding="utf-8") as f:
+                _lp = json.load(f) or {}
+            keep_name = _lp.get("name") or ""
+            keep_fid_hint = _lp.get("fid") or ""
+
+        pdir = ensure_cache_dir()
+        if not pdir:
+            print("[cache] 退出清理：缓存目录不存在", flush=True)
+            return {"kept": 0, "deleted": 0}
+
+        before = [it for it in _list_dir(pdir, 500) if not it.get("dir")]
+        if len(before) <= 1:
+            print("[cache] 退出清理：只有 %d 个文件，无需清理" % len(before), flush=True)
+            return {"kept": len(before), "deleted": 0}
+
+        # 找要保留的那一个：优先 fid（精确），其次文件名
+        keep_it = None
+        if keep_fid_hint:
+            for it in before:
+                if str(it.get("fid")) == str(keep_fid_hint):
+                    keep_it = it
+                    break
+        if keep_it is None and keep_name:
+            for it in before:
+                if (it.get("file_name") or "").strip() == keep_name.strip():
+                    keep_it = it
+                    break
+        if keep_it is None:
+            before.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+            keep_it = before[0]
+        keep_fid = keep_it.get("fid")
+        keep_size = int(keep_it.get("size") or 0)
+        print("[cache] 退出清理开始：共 %d 个文件，保留「%s」"
+              % (len(before), (keep_it.get("file_name") or "")[:44]), flush=True)
+
+        # 反复删，直到只剩目标（最多 20 轮，防止死循环）
+        for rnd in range(20):
+            items = [it for it in _list_dir(pdir, 500) if not it.get("dir")]
+            drop = [it for it in items if it.get("fid") != keep_fid]
+            if not drop:
+                break
+            print("[cache]   第 %d 轮：待删 %d 个" % (rnd + 1, len(drop)), flush=True)
+            _delete_items(drop, pdir, batch=30)
+            time.sleep(2)
+
+        # 复核
+        left = [it for it in _list_dir(pdir, 500) if not it.get("dir")]
+        left_size = sum(int(it.get("size") or 0) for it in left)
+        freed = sum(int(it.get("size") or 0) for it in before) - left_size
+        print("[cache] 退出清理完成：剩余 %d 个文件（%.2fGB），释放 %.2fGB"
+              % (len(left), left_size / 1024 ** 3, freed / 1024 ** 3), flush=True)
+        return {"kept": len(left), "deleted": len(before) - len(left),
+                "freed_bytes": freed, "left_bytes": left_size}
+    except Exception as e:
+        print("[cache] 退出清理失败:", str(e)[:120], flush=True)
+        return {"kept": 0, "deleted": 0, "error": str(e)[:120]}
+
+
+def prune_cache(keep=None):
+    """只保留最近 keep 部，删掉更早的。返回 {kept, deleted, freed_bytes}"""
+    if keep is None:
+        keep = _cache_policy()
+    pdir = ensure_cache_dir()
+    if not pdir:
+        return {"kept": 0, "deleted": 0, "freed_bytes": 0}
+    items = [it for it in _list_dir(pdir, 500) if not it.get("dir")]
+    if len(items) <= keep:
+        return {"kept": len(items), "deleted": 0, "freed_bytes": 0}
+
+    def ts(it):
+        for k in ("created_at", "updated_at", "file_create_time"):
+            v = it.get(k)
+            if v:
+                return str(v)
+        return ""
+
+    items.sort(key=ts, reverse=True)          # 新的在前
+    old = items[keep:]
+    freed = 0
+    for it in old:
+        try:
+            freed += int(it.get("size") or 0)
+        except Exception:
+            pass
+    n = _delete_fids([it["fid"] for it in old])
+    try:
+        print("[cache] 自动清理 keep=%d 删除 %d 个文件，释放 %.2fGB"
+              % (keep, n, freed / (1024 ** 3)), flush=True)
+    except Exception:
+        pass
+    return {"kept": keep, "deleted": n, "freed_bytes": freed}
 
 
 def clear_cache():
@@ -720,6 +905,7 @@ def resolve(share_url, passcode="", want_title="", ep=None, want_fid=None):
     # 先看缓存目录里有没有同样一份，有就直接用，不再重复转存
     name_t = target.get("file_name") or ""
     size_t = target.get("size")
+
     pdir = ensure_cache_dir()
     saved_fid = find_existing(name_t, size_t, pdir)
 
@@ -754,6 +940,11 @@ def resolve(share_url, passcode="", want_title="", ep=None, want_fid=None):
             store.put_search(key, name_t, {"fid": saved_fid})
         except Exception:
             pass
+
+    try:
+        remember_last(name_t, size_t, saved_fid or "")
+    except Exception:
+        pass
 
     url, err2 = direct_url(saved_fid)
     if not url:

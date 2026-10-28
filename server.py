@@ -3,6 +3,7 @@ Flixer 骨架服务
 阶段目标：把「搜索 → 详情 → 剧集列表（免转存）」跑通。
 播放相关（夸克转码 / 原始直链 / ffmpeg remux）留到下一阶段。
 """
+import io
 import json
 import os
 import re
@@ -1671,6 +1672,49 @@ def api_share():
         return err("解析异常: %s" % e, 500)
 
 
+@app.route("/api/cache/stats")
+def api_cache_stats():
+    """夸克网盘里「Flixer缓存」的占用情况"""
+    try:
+        return ok(PL.cache_stats())
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)[:160]})
+
+
+@app.route("/api/cache/policy", methods=["GET", "POST"])
+def api_cache_policy():
+    """自动清理策略：GET 读，POST 写（keep = 保留最近几部）"""
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cache_policy.json")
+    if request.method == "POST":
+        try:
+            body = request.get_json(silent=True) or {}
+            keep = int(body.get("keep", 3))
+            keep = max(0, min(keep, 50))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with io.open(path, "w", encoding="utf-8") as f:
+                json.dump({"keep": keep}, f)
+            return ok({"keep": keep})
+        except Exception as e:
+            return err(str(e)[:120], 400)
+    try:
+        keep = PL._cache_policy()
+    except Exception:
+        keep = 3
+    return ok({"keep": keep})
+
+
+@app.route("/api/cache/prune", methods=["POST"])
+def api_cache_prune():
+    """立即清理：只保留最近 N 部"""
+    try:
+        return ok(PL.prune_cache())
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)[:160]})
+
+
 @app.route("/api/cache/clear", methods=["POST"])
 def api_cache_clear():
     import sqlite3
@@ -1715,6 +1759,23 @@ except Exception:
     pass
 
 if __name__ == "__main__":
+    # 退出时清理夸克缓存：只保留最后播放的一部
+    import atexit as _atexit
+    import signal as _signal
+
+    def _exit_prune():
+        try:
+            from services import play as _PL
+            _PL.prune_on_exit()
+        except Exception as _e:
+            print("[cache] 退出清理异常:", str(_e)[:120], flush=True)
+
+    _atexit.register(_exit_prune)
+    try:
+        _signal.signal(_signal.SIGTERM, lambda *a: (_exit_prune(), os._exit(0)))
+        _signal.signal(_signal.SIGINT, lambda *a: (_exit_prune(), os._exit(0)))
+    except Exception:
+        pass
     port = int(os.environ.get("FLIXER_PORT", "7100"))
     print("Flixer stage2 -> http://127.0.0.1:%d" % port)
     threading.Thread(target=_keepalive_loop, daemon=True).start()
