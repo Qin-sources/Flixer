@@ -1717,7 +1717,21 @@ def api_cache_prune():
 
 @app.route("/api/cache/clear", methods=["POST"])
 def api_cache_clear():
-    import sqlite3
+    """清空夸克网盘里的「Flixer缓存」目录（释放网盘空间）"""
+    try:
+        r = PL.prune_on_exit()
+        return ok({"deleted": r.get("deleted", 0),
+                   "freed_bytes": r.get("freed_bytes", 0),
+                   "left": r.get("left", 0),
+                   "error": r.get("error")})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)[:160]})
+
+
+@app.route("/api/cache/clear-local", methods=["POST"])
+def api_cache_clear_local():
+    """清空本地 SQLite 缓存（原来的行为，改名保留）"""
     try:
         with S._lock:
             conn = S._db()
