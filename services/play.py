@@ -288,7 +288,7 @@ _LAST_JSON = os.path.join(_ROOT, "data", "last_play.json")
 
 
 def remember_last(name, size=0, fid=""):
-    """记录最后播放的文件（退出清理时按 fid 精确保留）"""
+    """记录最后播放的文件（清理时按 fid 精确保留）"""
     try:
         os.makedirs(os.path.dirname(_LAST_JSON), exist_ok=True)
         with io.open(_LAST_JSON, "w", encoding="utf-8") as f:
@@ -311,12 +311,12 @@ def prune_on_exit():
 
         pdir = ensure_cache_dir()
         if not pdir:
-            print("[cache] 退出清理：缓存目录不存在", flush=True)
+            print("[cache] 缓存目录不存在", flush=True)
             return {"kept": 0, "deleted": 0}
 
         before = [it for it in _list_dir(pdir, 500) if not it.get("dir")]
         if len(before) <= 1:
-            print("[cache] 退出清理：只有 %d 个文件，无需清理" % len(before), flush=True)
+            print("[cache] 缓存已空（%d 个文件），无需清理" % len(before), flush=True)
             return {"kept": len(before), "deleted": 0}
 
         # 找要保留的那一个：优先 fid（精确），其次文件名
@@ -336,7 +336,7 @@ def prune_on_exit():
             keep_it = before[0]
         keep_fid = keep_it.get("fid")
         keep_size = int(keep_it.get("size") or 0)
-        print("[cache] 退出清理开始：共 %d 个文件，保留「%s」"
+        print("[cache] 清理开始：共 %d 个文件，保留「%s」"
               % (len(before), (keep_it.get("file_name") or "")[:44]), flush=True)
 
         # 反复删，直到只剩目标（最多 20 轮，防止死循环）
@@ -353,12 +353,12 @@ def prune_on_exit():
         left = [it for it in _list_dir(pdir, 500) if not it.get("dir")]
         left_size = sum(int(it.get("size") or 0) for it in left)
         freed = sum(int(it.get("size") or 0) for it in before) - left_size
-        print("[cache] 退出清理完成：剩余 %d 个文件（%.2fGB），释放 %.2fGB"
+        print("[cache] 清理完成：剩余 %d 个文件（%.2fGB），释放 %.2fGB"
               % (len(left), left_size / 1024 ** 3, freed / 1024 ** 3), flush=True)
         return {"kept": len(left), "deleted": len(before) - len(left),
                 "freed_bytes": freed, "left_bytes": left_size}
     except Exception as e:
-        print("[cache] 退出清理失败:", str(e)[:120], flush=True)
+        print("[cache] 清理失败:", str(e)[:120], flush=True)
         return {"kept": 0, "deleted": 0, "error": str(e)[:120]}
 
 

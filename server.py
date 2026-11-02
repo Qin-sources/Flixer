@@ -1773,23 +1773,6 @@ except Exception:
     pass
 
 if __name__ == "__main__":
-    # 退出时清理夸克缓存：只保留最后播放的一部
-    import atexit as _atexit
-    import signal as _signal
-
-    def _exit_prune():
-        try:
-            from services import play as _PL
-            _PL.prune_on_exit()
-        except Exception as _e:
-            print("[cache] 退出清理异常:", str(_e)[:120], flush=True)
-
-    _atexit.register(_exit_prune)
-    try:
-        _signal.signal(_signal.SIGTERM, lambda *a: (_exit_prune(), os._exit(0)))
-        _signal.signal(_signal.SIGINT, lambda *a: (_exit_prune(), os._exit(0)))
-    except Exception:
-        pass
     port = int(os.environ.get("FLIXER_PORT", "7100"))
     print("Flixer stage2 -> http://127.0.0.1:%d" % port)
     threading.Thread(target=_keepalive_loop, daemon=True).start()
@@ -1832,6 +1815,23 @@ if __name__ == "__main__":
             print("[warm] 每日推荐就绪")
         except Exception as _e:
             print("[warm] 每日推荐失败", str(_e)[:80])
+
+    # 启动清理：清空上次运行残留的夸克缓存（不依赖退出钩子，怎么死都能兜住）
+    def _start_clean():
+        try:
+            time.sleep(3)          # 等服务完全就绪
+            from services import play as _PL
+            r = _PL.prune_on_exit()
+            print("[cache] 启动清理: 删除 %s 个文件, 释放 %.2fGB"
+                  % (r.get("deleted", 0), (r.get("freed_bytes") or 0) / 1024 ** 3),
+                  flush=True)
+        except Exception as _e:
+            print("[cache] 启动清理失败:", str(_e)[:120], flush=True)
+
+    try:
+        threading.Thread(target=_start_clean, daemon=True).start()
+    except Exception:
+        pass
 
     try:
         threading.Thread(target=_prewarm, daemon=True).start()
