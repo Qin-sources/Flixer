@@ -4350,7 +4350,8 @@ const FSTATE = {
   region: '全部',
   year: '全部',
   genre: '全部',
-  sort: '综合',           // 综合 | 时间 | 评分
+  sort: '综合',           // 综合 | 时间 | 时间↑ | 评分
+  yearRange: '全部',      // 全部 | 近一年 | 2020年代 ...
   page: 0,
 };
 
@@ -4360,7 +4361,8 @@ let FREGIONS = [];
 let FYEARS = [];
 let FGENRES = [];
 const FMEDIA = ['全部', '电影', '电视剧', '纪录片', '综艺', '动漫'];
-const FSORTS = ['综合', '时间', '评分'];
+const FYEARRANGES = ['全部', '近一年', '2020年代', '2010年代', '2000年代', '90年代', '更早'];
+const FSORTS = ['综合', '时间', '时间↑', '评分'];
 
 const F_FALLBACK = {
   regions: ['华语', '欧美', '韩国', '日本', '美国', '英国', '法国', '泰国', '印度'],
@@ -4388,7 +4390,7 @@ function frowHtml(label, items, key){
 
 async function openFilter(media){
   if (media) FSTATE.media = media;
-  if (!FSTATE.mtype || FSTATE.mtype === '') FSTATE.mtype = '电影';
+  if (!FSTATE.mtype || FSTATE.mtype === '') FSTATE.mtype = '全部';
   FSTATE.page = 0;
   stopHeroTimer();
   setTab(media === 'tv' ? 'tv' : (media === 'movie' ? 'movie' : 'filter'));
@@ -4415,7 +4417,8 @@ async function openFilter(media){
     <div class="frows">
       ${frowHtml('地区', FREGIONS, 'region')}
       ${frowHtml('门类', FMEDIA, 'mtype')}
-      ${frowHtml('类型', FGENRES, 'genre')}
+      ${frowHtml('年份', FYEARRANGES, 'yearRange')}
+    ${frowHtml('类型', FGENRES, 'genre')}
       ${frowHtml('排序', FSORTS, 'sort')}
     </div>
 
@@ -4440,8 +4443,22 @@ function fQuery(){
   q.set('media', FSTATE.mtype || '全部');
   if (FSTATE.region && FSTATE.region !== '全部') q.set('region', FSTATE.region);
   if (FSTATE.genre && FSTATE.genre !== '全部') q.set('genre', FSTATE.genre);
-  const sortMap = {'综合': '热度', '时间': '最新', '评分': '评分', '热度': '热度', '最新': '最新'};
+  const sortMap = {'综合': '热度', '热度': '热度', '时间': '最新', '时间↑': '最新↑', '评分': '评分', '最新': '最新'};
   q.set('sort', sortMap[FSTATE.sort] || '热度');
+  const _nowY = new Date().getFullYear();
+  const _YR = {
+    '近一年': [_nowY - 1, _nowY],
+    '2020年代': [2020, 2029],
+    '2010年代': [2010, 2019],
+    '2000年代': [2000, 2009],
+    '90年代': [1990, 1999],
+    '更早': [1900, 1989]
+  };
+  const _yr = _YR[FSTATE.yearRange];
+  if (_yr){
+    q.set('year_from', String(_yr[0]));
+    q.set('year_to', String(_yr[1]));
+  }
   q.set('page', String(Math.max(1, (FSTATE.page || 0) + 1)));
   return q;
 }
@@ -4450,7 +4467,7 @@ function fSelText(){
   const parts = [];
   if (FSTATE.region !== '全部') parts.push(FSTATE.region);
   if (FSTATE.genre !== '全部') parts.push(FSTATE.genre);
-  if (FSTATE.year !== '全部') parts.push(FSTATE.year);
+  if (FSTATE.yearRange && FSTATE.yearRange !== '全部') parts.push(FSTATE.yearRange);
   return parts.length ? parts.join(' · ') : '全部影片';
 }
 
@@ -4465,7 +4482,7 @@ function _fvSnapSave(){
       y: window.scrollY || 0,
       page: FSTATE.page,
       total: FSTATE.totalPages || 1,
-      media: FSTATE.mtype, region: FSTATE.region, genre: FSTATE.genre, sort: FSTATE.sort
+      media: FSTATE.mtype, region: FSTATE.region, genre: FSTATE.genre, sort: FSTATE.sort, yearRange: FSTATE.yearRange
     };
     return true;
   } catch(e){ return false; }
@@ -4480,7 +4497,7 @@ function _fvSnapRestore(){
     FSTATE.page = s.page;
     FSTATE.totalPages = s.total;
     FSTATE.mtype = s.media; FSTATE.region = s.region;
-    FSTATE.genre = s.genre; FSTATE.sort = s.sort;
+    FSTATE.genre = s.genre; FSTATE.sort = s.sort; FSTATE.yearRange = s.yearRange || '全部';
     // 重新绑卡片点击
     document.querySelectorAll('#fvGrid .card').forEach(c => {
       c.onclick = () => openMovieDetail(_mdItemFromCard(c));
@@ -4512,7 +4529,7 @@ async function runFilter(reset){
       it.rating = it.rating || 0;
     });
     if (cnt) cnt.textContent = items.length ? (items.length + ' 部') : '';
-    FSTATE.totalPages = (j.data || {}).total_pages || 1;
+    FSTATE.totalPages = Math.max(1, (j.data || {}).total_pages || 1);
 
     if (!items.length){
       g.innerHTML = '<div class="fv-empty" style="grid-column:1/-1">'
@@ -4529,7 +4546,10 @@ async function runFilter(reset){
     if (reset && window.Motion) Motion.animate(g, {opacity:[0,1]}, {duration:.25});   // 翻页不再整块淡入，避免闪一下
 
     if (more){
-      more.innerHTML = '';
+      const _atEnd = (FSTATE.page + 1 >= (FSTATE.totalPages || 1)) && !reset;
+      more.innerHTML = _atEnd
+        ? '<div style="text-align:center;color:#6a6a6a;font-size:12.5px;padding:18px 0">— 已经到底了 —</div>'
+        : '';
       // 无限滚动：滚到底自动加载下一页
       if (!window.__fvScrollBound){
         window.__fvScrollBound = true;

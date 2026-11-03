@@ -33,6 +33,12 @@ MEDIA = [
     ("动漫", "tv", 16),
 ]
 
+# 语言优先的地区：用 with_original_language 更准（国家字段会把合拍片算成 CN）
+LANG_REGIONS = {
+    "华语": "zh", "大陆": "zh", "香港": "zh", "台湾": "zh",
+    "日语": "ja", "韩语": "ko", "英语": "en",
+}
+
 REGIONS = {
     "华语": "CN|HK|TW",
     "大陆": "CN",
@@ -63,7 +69,9 @@ GENRES = {
 SORTS = {
     "热度": "popularity.desc",
     "评分": "vote_average.desc",
+    "评分↑": "vote_average.asc",
     "最新": "primary_release_date.desc",
+    "最新↑": "primary_release_date.asc",
     "最多评价": "vote_count.desc",
 }
 
@@ -127,23 +135,35 @@ def discover(media="电影", region="全部", genre="全部", sort="热度",
     }
     if gids:
         params["with_genres"] = ",".join(str(g) for g in gids)
-    if region and region != "全部" and region in REGIONS:
-        params["with_origin_country"] = REGIONS[region]
-    if kind == "movie":
-        if year_from:
-            params["primary_release_date.gte"] = "%d-01-01" % int(year_from)
-        if year_to:
-            params["primary_release_date.lte"] = "%d-12-31" % int(year_to)
-        if sort == "评分":
-            params["vote_count.gte"] = 200
-    else:
-        if year_from:
-            params["first_air_date.gte"] = "%d-01-01" % int(year_from)
-        if year_to:
-            params["first_air_date.lte"] = "%d-12-31" % int(year_to)
+    # 地区：华语等优先用「语言」，比国家字段准确（合拍片不会被算成 CN）
+    if region and region != "全部":
+        if region in LANG_REGIONS:
+            params["with_original_language"] = LANG_REGIONS[region]
+        elif region in REGIONS:
+            params["with_origin_country"] = REGIONS[region]
+
+    date_key = "primary_release_date" if kind == "movie" else "first_air_date"
+
+    # 时间排序必须配日期范围，否则 TMDB 返回空
+    if sort in ("最新", "最新↑"):
+        if not year_from:
+            params[date_key + ".gte"] = "1900-01-01"
+        if not year_to:
+            params[date_key + ".lte"] = time.strftime("%Y-%m-%d")
+
+    if year_from:
+        params[date_key + ".gte"] = "%d-01-01" % int(year_from)
+    if year_to:
+        params[date_key + ".lte"] = "%d-12-31" % int(year_to)
+
+    if kind == "tv":
         params["include_null_first_air_dates"] = "false"
-        if sort == "评分":
-            params["vote_count.gte"] = 50
+
+    # 投票数过滤：挡掉零评分的垃圾/三级片条目
+    if sort in ("评分", "评分↑"):
+        params["vote_count.gte"] = "200" if kind == "movie" else "50"
+    else:
+        params["vote_count.gte"] = "5"
 
     from urllib.parse import urlencode
     qs = urlencode(params)
@@ -188,7 +208,7 @@ def discover(media="电影", region="全部", genre="全部", sort="热度",
     data = {
         "items": out[:limit],
         "page": int(j.get("page") or page),
-        "total_pages": int(j.get("total_pages") or 0),
+        "total_pages": min(int(j.get("total_pages") or 0), 500),
         "total": int(j.get("total_results") or 0),
         "filters": {"media": media, "region": region, "genre": genre, "sort": sort},
     }
